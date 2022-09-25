@@ -1,11 +1,14 @@
-use std::{fs::File, env::args, io::{Seek, SeekFrom}};
+use std::{
+    env::args,
+    fs::File,
+    io::{Seek, SeekFrom},
+};
 
 use binrw::BinReaderExt;
 /// get the info of a single file
-/// 
-/// 
-
-use brstm::structs::{BrstmHeader, Head, Head1, Head2};
+///
+///
+use brstm::structs::{BrstmHeader, Head, Head1, Head2, TrackDescriptionOffset, TrackDescription, Head3, AdpcmChannelInformation};
 
 pub fn process_file(filename: &String) -> binrw::BinResult<()> {
     let mut f = File::open(filename)?;
@@ -15,14 +18,30 @@ pub fn process_file(filename: &String) -> binrw::BinResult<()> {
     f.seek(SeekFrom::Start(header.head_offset.into()))?;
     let head: Head = f.read_be()?;
     println!("{head:?}");
-    let head1_off = header.head_offset + head.head_chunks[0].head_chunk_offset + 8;
+    let head_base_offset = header.head_offset + 8;
+    let head1_off = head_base_offset + head.head_chunks[0].head_chunk_offset;
     f.seek(SeekFrom::Start(head1_off.into()))?;
     let head1: Head1 = f.read_be()?;
     println!("{head1:?}");
-    let head2_off = header.head_offset + head.head_chunks[1].head_chunk_offset + 8;
+    let head2_off = head_base_offset + head.head_chunks[1].head_chunk_offset;
     f.seek(SeekFrom::Start(head2_off.into()))?;
-    let head1: Head2 = f.read_be()?;
-    println!("{head1:?}");
+    let head2: Head2 = f.read_be()?;
+    println!("{head2:?}");
+    for desc_offset in head2.track_info.iter() {
+        println!("{desc_offset:?}");
+        f.seek(SeekFrom::Start((head_base_offset + desc_offset.track_description_offset).into()))?;
+        let track_descrption = f.read_be_args::<TrackDescription>((desc_offset.track_desc_type,))?;
+        println!("{track_descrption:?}");
+    }
+    let head3_off = head_base_offset + head.head_chunks[2].head_chunk_offset;
+    f.seek(SeekFrom::Start(head3_off.into()))?;
+    let head3: Head3 = f.read_be()?;
+    println!("{head3:?}");
+    for info_offset in head3.info_offsets.iter() {
+        f.seek(SeekFrom::Start((head_base_offset + info_offset.offset).into()))?;
+        let adpcm_info: AdpcmChannelInformation = f.read_be()?;
+        println!("{adpcm_info:?}");
+    }
 
     Ok(())
 }
