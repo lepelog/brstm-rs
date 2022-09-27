@@ -1,20 +1,28 @@
-use binrw::binrw;
+use std::io::{Read, Seek};
+
+use binrw::{binrw, BinReaderExt, BinResult};
 
 // note: HEAD chunk, an ADPC chunk and a DATA chunk. Each chunk is padded to a multiple of 0x20.
 
 #[binrw]
 #[brw(big, magic = b"RSTM")]
-#[br(assert(bom == 0xFEFF), assert(header_length == 0x40))]
+#[br(assert(bom == 0xFEFF), assert(header_length == 0x40), assert(version == 0x0100), assert(chunk_count == 2))]
 #[derive(Debug, Default, Clone)]
 pub struct BrstmHeader {
+    #[br(temp)]
+    #[bw(calc = 0xFEFF)]
     pub bom: u16,
     // usually 01 00
+    #[br(temp)]
+    #[bw(calc = 0x0100)]
     pub version: u16,
     pub file_length: u32,
     #[br(temp)]
     #[bw(calc = 0x40)]
     pub header_length: u16,
     // usually 00 02
+    #[br(temp)]
+    #[bw(calc = 2)]
     pub chunk_count: u16,
     pub head_offset: u32,
     pub head_size: u32,
@@ -104,8 +112,8 @@ pub struct Head2 {
 }
 
 impl Head2 {
-    pub fn byte_len(&self) -> u32 {
-        4 + self.track_info.len() as u32 * TrackDescriptionOffset::byte_len()
+    pub fn byte_len(track_count: u32) -> u32 {
+        4 + track_count * TrackDescriptionOffset::byte_len()
     }
 }
 
@@ -131,9 +139,9 @@ impl TrackDescriptionOffset {
 #[brw(big)]
 #[derive(Debug, Default, Clone)]
 pub struct TrackDescriptionV1 {
-    track_volume: u8,
+    pub track_volume: u8,
     #[brw(pad_after = 6)]
-    track_panning: u8,
+    pub track_panning: u8,
 }
 
 #[binrw]
@@ -222,8 +230,8 @@ pub struct Head3 {
 }
 
 impl Head3 {
-    pub fn byte_len(&self) -> u32 {
-        4 + self.info_offsets.len() as u32 * Head3ChannelInfoOffset::byte_len()
+    pub fn byte_len(channel_count: u32) -> u32 {
+        4 + channel_count * Head3ChannelInfoOffset::byte_len()
     }
 }
 
@@ -251,17 +259,17 @@ pub struct AdpcmChannelInformation {
     #[bw(calc = 0x0100_0000)]
     marker: u32,
     // points to the data directly after this field
-    channel_adpcm_coefficients_offset: u32,
-    adpcm_coefficients: [i16; 16],
+    pub channel_adpcm_coefficients_offset: u32,
+    pub adpcm_coefficients: [i16; 16],
     // always zero
-    gain: i16,
-    initial_predictor: i16,
-    history_sample1: i16,
-    history_sample2: i16,
-    loop_predictor: i16,
-    loop_history_sample1: i16,
+    pub gain: i16,
+    pub initial_predictor: i16,
+    pub history_sample1: i16,
+    pub history_sample2: i16,
+    pub loop_predictor: i16,
+    pub loop_history_sample1: i16,
     #[brw(pad_after = 2)]
-    loop_history_sample2: i16,
+    pub loop_history_sample2: i16,
 }
 
 impl AdpcmChannelInformation {
@@ -270,13 +278,51 @@ impl AdpcmChannelInformation {
     }
 }
 
+#[binrw]
+#[brw(big, magic = b"ADPC")]
+#[derive(Debug, Default, Clone)]
+pub struct AdpcHeader {
+    pub data_len: u32,
+}
+
+pub fn read_adpcm_section<R: Read + Seek>(r: &mut R) -> BinResult<Vec<u8>> {
+    let header: AdpcHeader = r.read_be()?;
+    // TODO: use ReadBuf (or whatever it turns into)
+    let mut buf = vec![0; header.data_len as usize - 8];
+    r.read_exact(&mut buf)?;
+    Ok(buf)
+}
+
+#[binrw]
+#[brw(big, magic = b"DATA")]
+#[br(assert(padding_bytes == 0x18))]
+#[derive(Debug, Default, Clone)]
+pub struct DataHeader {
+    pub data_len: u32,
+    #[brw(pad_after = 0x14)]
+    #[br(temp)]
+    #[bw(calc = 0x18)]
+    padding_bytes: u32,
+}
+
+pub fn read_data_section<R: Read + Seek>(r: &mut R) -> BinResult<Vec<u8>> {
+    let header: DataHeader = r.read_be()?;
+    // TODO: use ReadBuf (or whatever it turns into)
+    let mut buf = vec![0; header.data_len as usize - 0x20];
+    r.read_exact(&mut buf)?;
+    Ok(buf)
+}
+
 #[cfg(test)]
 mod test {
     use std::io::{Cursor, Write};
 
-    use binrw::{BinWriterExt, BinRead, BinWrite};
+    use binrw::{BinRead, BinWrite, BinWriterExt};
 
-    use crate::structs::{Head, Head1, Head2, TrackDescriptionOffset, Head3, Head3ChannelInfoOffset, AdpcmChannelInformation, BrstmHeader};
+    use crate::structs::{
+        AdpcmChannelInformation, BrstmHeader, Head, Head1, Head2, Head3, Head3ChannelInfoOffset,
+        TrackDescriptionOffset,
+    };
 
     #[test]
     pub fn check_byte_lens() {
@@ -299,25 +345,25 @@ mod test {
         buf.clear();
         let mut head2 = Head2::default();
         Cursor::new(&mut buf).write_be(&head2).unwrap();
-        assert_eq!(head2.byte_len() as usize, buf.len());
+        assert_eq!(Head2::byte_len(0) as usize, buf.len());
 
         buf.clear();
         head2.track_info.push(TrackDescriptionOffset::default());
         head2.track_info.push(TrackDescriptionOffset::default());
         Cursor::new(&mut buf).write_be(&head2).unwrap();
-        assert_eq!(head2.byte_len() as usize, buf.len());
+        assert_eq!(Head2::byte_len(2) as usize, buf.len());
 
         buf.clear();
         let mut head3 = Head3::default();
         Cursor::new(&mut buf).write_be(&head3).unwrap();
-        assert_eq!(head3.byte_len() as usize, buf.len());
+        assert_eq!(Head3::byte_len(0) as usize, buf.len());
 
         buf.clear();
         head3.info_offsets.push(Head3ChannelInfoOffset::default());
         head3.info_offsets.push(Head3ChannelInfoOffset::default());
         head3.info_offsets.push(Head3ChannelInfoOffset::default());
         Cursor::new(&mut buf).write_be(&head3).unwrap();
-        assert_eq!(head3.byte_len() as usize, buf.len());
+        assert_eq!(Head3::byte_len(3) as usize, buf.len());
 
         buf.clear();
         let channel_info = AdpcmChannelInformation::default();
