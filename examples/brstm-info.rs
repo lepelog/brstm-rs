@@ -31,7 +31,6 @@ pub fn process_file(filename: &String) -> binrw::BinResult<()> {
     let head2: Head2 = f.read_be()?;
     println!("{head2:?}");
     for desc_offset in head2.track_info.iter() {
-        println!("{desc_offset:?}");
         f.seek(SeekFrom::Start(
             (head_base_offset + desc_offset.track_description_offset).into(),
         ))?;

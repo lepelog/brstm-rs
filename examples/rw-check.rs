@@ -1,4 +1,7 @@
-use std::{fs::{self}, io::Cursor};
+use std::{
+    fs::{self},
+    io::Cursor,
+};
 
 use brstm::brstm::ParsedBrstm;
 
