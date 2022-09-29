@@ -3,15 +3,17 @@ use std::{
     io::Cursor,
 };
 
-use brstm::brstm::ParsedBrstm;
+use brstm::brstm::BrstmInformation;
 
 pub fn main() {
     for src in std::env::args().skip(1) {
         let orig = fs::read(&src).unwrap();
         let mut dest = Vec::with_capacity(orig.len());
         println!("{src}");
-        let parsed = ParsedBrstm::parse_reader(&mut Cursor::new(&orig)).unwrap();
-        parsed.write_brstm(&mut Cursor::new(&mut dest)).unwrap();
+        let mut cursor = Cursor::new(&orig);
+        let parsed = BrstmInformation::from_reader(&mut cursor).unwrap();
+        let data_parsed = parsed.into_with_data(&mut cursor).unwrap();
+        data_parsed.write_brstm(&mut Cursor::new(&mut dest)).unwrap();
         if orig != dest {
             println!("missmatch: {src}");
         }

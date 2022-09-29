@@ -9,8 +9,8 @@ use binrw::BinReaderExt;
 ///
 ///
 use brstm::structs::{
-    AdpcHeader, AdpcmChannelInformation, BrstmHeader, DataHeader, Head1, Head2, Head3,
-    HeadSectionHeader, TrackDescription,
+    AdpcHeader, AdpcmChannelInformation, BrstmHeader, DataHeader, HeadSectionHeader, Head1, Head2, Head3,
+    TrackDescription,
 };
 
 pub fn process_file(filename: &String) -> binrw::BinResult<()> {

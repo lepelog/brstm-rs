@@ -320,7 +320,7 @@ mod test {
     use binrw::BinWriterExt;
 
     use crate::structs::{
-        AdpcmChannelInformation, BrstmHeader, Head1, Head2, Head3, ChannelInfoOffset,
+        AdpcmChannelInformation, BrstmHeader, ChannelInfoOffset, Head1, Head2, Head3,
         HeadSectionHeader, TrackInfoOffset,
     };
 
