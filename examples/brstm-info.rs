@@ -9,8 +9,8 @@ use binrw::BinReaderExt;
 ///
 ///
 use brstm::structs::{
-    AdpcHeader, AdpcmChannelInformation, BrstmHeader, DataHeader, Head, Head1, Head2, Head3,
-    TrackDescription,
+    AdpcHeader, AdpcmChannelInformation, BrstmHeader, DataHeader, Head1, Head2, Head3,
+    HeadSectionHeader, TrackDescription,
 };
 
 pub fn process_file(filename: &String) -> binrw::BinResult<()> {
@@ -19,7 +19,7 @@ pub fn process_file(filename: &String) -> binrw::BinResult<()> {
     println!("{filename}");
     println!("{header:?}");
     f.seek(SeekFrom::Start(header.head_offset.into()))?;
-    let head: Head = f.read_be()?;
+    let head: HeadSectionHeader = f.read_be()?;
     println!("{head:?}");
     let head_base_offset = header.head_offset + 8;
     let head1_off = head_base_offset + head.head_chunks[0].head_chunk_offset;
@@ -30,12 +30,12 @@ pub fn process_file(filename: &String) -> binrw::BinResult<()> {
     f.seek(SeekFrom::Start(head2_off.into()))?;
     let head2: Head2 = f.read_be()?;
     println!("{head2:?}");
-    for desc_offset in head2.track_info.iter() {
+    for desc_offset in head2.track_info_offsets.iter() {
         f.seek(SeekFrom::Start(
-            (head_base_offset + desc_offset.track_description_offset).into(),
+            (head_base_offset + desc_offset.offset).into(),
         ))?;
         let track_descrption =
-            f.read_be_args::<TrackDescription>((desc_offset.track_desc_type,))?;
+            f.read_be_args::<TrackDescription>((desc_offset.track_info_type,))?;
         println!("{track_descrption:?}");
     }
     let head3_off = head_base_offset + head.head_chunks[2].head_chunk_offset;

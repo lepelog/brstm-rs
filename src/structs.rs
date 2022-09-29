@@ -42,14 +42,14 @@ impl BrstmHeader {
 #[binrw]
 #[brw(big)]
 #[derive(Debug, Default, Clone)]
-pub struct HeadChunkDefs {
+pub struct HeadChunkOffsets {
     #[br(temp)]
     #[bw(calc = 0x0100_0000)]
     marker: u32,
     pub head_chunk_offset: u32,
 }
 
-impl HeadChunkDefs {
+impl HeadChunkOffsets {
     pub fn byte_len() -> u32 {
         8
     }
@@ -58,14 +58,14 @@ impl HeadChunkDefs {
 #[binrw]
 #[brw(big, magic = b"HEAD")]
 #[derive(Debug, Default, Clone)]
-pub struct Head {
+pub struct HeadSectionHeader {
     pub head_chunk_size: u32,
-    pub head_chunks: [HeadChunkDefs; 3],
+    pub head_chunks: [HeadChunkOffsets; 3],
 }
 
-impl Head {
+impl HeadSectionHeader {
     pub fn byte_len() -> u32 {
-        8 + 3 * HeadChunkDefs::byte_len()
+        8 + 3 * HeadChunkOffsets::byte_len()
     }
 }
 
@@ -103,33 +103,33 @@ impl Head1 {
 #[derive(Debug, Default, Clone)]
 pub struct Head2 {
     #[br(temp)]
-    #[bw(calc = track_info.len() as u8)]
+    #[bw(calc = track_info_offsets.len() as u8)]
     num_tracks: u8,
-    pub track_desc_type: u8,
+    pub track_info_type: u8,
     #[brw(pad_before = 2)]
     #[br(count = num_tracks)]
-    pub track_info: Vec<TrackDescriptionOffset>,
+    pub track_info_offsets: Vec<TrackInfoOffset>,
 }
 
 impl Head2 {
     pub fn byte_len(track_count: u32) -> u32 {
-        4 + track_count * TrackDescriptionOffset::byte_len()
+        4 + track_count * TrackInfoOffset::byte_len()
     }
 }
 
 #[binrw]
 #[brw(big)]
 #[derive(Debug, Default, Clone)]
-pub struct TrackDescriptionOffset {
+pub struct TrackInfoOffset {
     #[br(temp)]
     #[bw(calc = 1)]
     marker: u8,
-    pub track_desc_type: u8,
+    pub track_info_type: u8,
     #[brw(pad_before = 2)]
-    pub track_description_offset: u32,
+    pub offset: u32,
 }
 
-impl TrackDescriptionOffset {
+impl TrackInfoOffset {
     pub fn byte_len() -> u32 {
         8
     }
@@ -152,18 +152,18 @@ pub struct TrackDescription {
     #[br(if(version == 1))]
     pub info_v1: Option<TrackDescriptionV1>,
     #[br(temp)]
-    #[bw(calc = track_channel.channels())]
+    #[bw(calc = channels.channels())]
     channels_in_track: u8,
     #[br(temp)]
-    #[bw(calc = track_channel.left_channel_id())]
+    #[bw(calc = channels.left_channel_id())]
     left_channel_id: u8,
     #[brw(pad_after = 1)]
     #[br(temp)]
-    #[bw(calc = track_channel.right_channel_id())]
+    #[bw(calc = channels.right_channel_id())]
     right_channel_id: u8,
     #[bw(ignore)]
-    #[br(calc = if channels_in_track == 1 { TrackChannel::Mono(left_channel_id) } else { TrackChannel::Stereo(left_channel_id, right_channel_id) })]
-    pub track_channel: TrackChannel,
+    #[br(calc = if channels_in_track == 1 { Channels::Mono(left_channel_id) } else { Channels::Stereo(left_channel_id, right_channel_id) })]
+    pub channels: Channels,
 }
 
 impl TrackDescription {
@@ -183,18 +183,18 @@ impl TrackDescription {
 }
 
 #[derive(Debug, Clone)]
-pub enum TrackChannel {
+pub enum Channels {
     Mono(u8),
     Stereo(u8, u8),
 }
 
-impl Default for TrackChannel {
+impl Default for Channels {
     fn default() -> Self {
         Self::Mono(0)
     }
 }
 
-impl TrackChannel {
+impl Channels {
     pub fn channels(&self) -> u8 {
         match self {
             Self::Mono(..) => 1,
@@ -226,26 +226,26 @@ pub struct Head3 {
     channel_count: u8,
     #[brw(pad_before = 3)]
     #[br(count = channel_count)]
-    pub info_offsets: Vec<Head3ChannelInfoOffset>,
+    pub info_offsets: Vec<ChannelInfoOffset>,
 }
 
 impl Head3 {
     pub fn byte_len(channel_count: u32) -> u32 {
-        4 + channel_count * Head3ChannelInfoOffset::byte_len()
+        4 + channel_count * ChannelInfoOffset::byte_len()
     }
 }
 
 #[binrw]
 #[brw(big)]
 #[derive(Debug, Default, Clone)]
-pub struct Head3ChannelInfoOffset {
+pub struct ChannelInfoOffset {
     #[br(temp)]
     #[bw(calc = 0x0100_0000)]
     marker: u32,
     pub offset: u32,
 }
 
-impl Head3ChannelInfoOffset {
+impl ChannelInfoOffset {
     pub fn byte_len() -> u32 {
         8
     }
@@ -315,13 +315,13 @@ pub fn read_data_section<R: Read + Seek>(r: &mut R) -> BinResult<Vec<u8>> {
 
 #[cfg(test)]
 mod test {
-    use std::io::{Cursor, Write};
+    use std::io::Cursor;
 
-    use binrw::{BinRead, BinWrite, BinWriterExt};
+    use binrw::BinWriterExt;
 
     use crate::structs::{
-        AdpcmChannelInformation, BrstmHeader, Head, Head1, Head2, Head3, Head3ChannelInfoOffset,
-        TrackDescriptionOffset,
+        AdpcmChannelInformation, BrstmHeader, Head1, Head2, Head3, ChannelInfoOffset,
+        HeadSectionHeader, TrackInfoOffset,
     };
 
     #[test]
@@ -333,9 +333,9 @@ mod test {
         assert_eq!(BrstmHeader::byte_len() as usize, buf.len());
 
         buf.clear();
-        let head = Head::default();
+        let head = HeadSectionHeader::default();
         Cursor::new(&mut buf).write_be(&head).unwrap();
-        assert_eq!(Head::byte_len() as usize, buf.len());
+        assert_eq!(HeadSectionHeader::byte_len() as usize, buf.len());
 
         buf.clear();
         let head1 = Head1::default();
@@ -348,8 +348,8 @@ mod test {
         assert_eq!(Head2::byte_len(0) as usize, buf.len());
 
         buf.clear();
-        head2.track_info.push(TrackDescriptionOffset::default());
-        head2.track_info.push(TrackDescriptionOffset::default());
+        head2.track_info_offsets.push(TrackInfoOffset::default());
+        head2.track_info_offsets.push(TrackInfoOffset::default());
         Cursor::new(&mut buf).write_be(&head2).unwrap();
         assert_eq!(Head2::byte_len(2) as usize, buf.len());
 
@@ -359,9 +359,9 @@ mod test {
         assert_eq!(Head3::byte_len(0) as usize, buf.len());
 
         buf.clear();
-        head3.info_offsets.push(Head3ChannelInfoOffset::default());
-        head3.info_offsets.push(Head3ChannelInfoOffset::default());
-        head3.info_offsets.push(Head3ChannelInfoOffset::default());
+        head3.info_offsets.push(ChannelInfoOffset::default());
+        head3.info_offsets.push(ChannelInfoOffset::default());
+        head3.info_offsets.push(ChannelInfoOffset::default());
         Cursor::new(&mut buf).write_be(&head3).unwrap();
         assert_eq!(Head3::byte_len(3) as usize, buf.len());
 

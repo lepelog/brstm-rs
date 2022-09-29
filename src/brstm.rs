@@ -3,9 +3,9 @@ use std::io::{self, Read, Seek, SeekFrom, Write};
 use binrw::{BinReaderExt, BinResult, BinWriterExt};
 
 use crate::structs::{
-    AdpcHeader, AdpcmChannelInformation, BrstmHeader, DataHeader, Head, Head1, Head2, Head3,
-    Head3ChannelInfoOffset, HeadChunkDefs, TrackChannel, TrackDescription, TrackDescriptionOffset,
-    TrackDescriptionV1,
+    AdpcHeader, AdpcmChannelInformation, BrstmHeader, DataHeader, Head1, Head2, Head3,
+    ChannelInfoOffset, HeadChunkOffsets, HeadSectionHeader, Channels, TrackDescription,
+    TrackDescriptionV1, TrackInfoOffset,
 };
 
 fn align_next_32(off: u32) -> u32 {
@@ -35,7 +35,7 @@ impl ParsedBrstm {
     pub fn parse_reader<RS: Read + Seek>(f: &mut RS) -> BinResult<Self> {
         let header = f.read_be::<BrstmHeader>()?;
         f.seek(SeekFrom::Start(header.head_offset.into()))?;
-        let head: Head = f.read_be()?;
+        let head: HeadSectionHeader = f.read_be()?;
         let head_base_offset = header.head_offset + 8;
         let head1_off = head_base_offset + head.head_chunks[0].head_chunk_offset;
         f.seek(SeekFrom::Start(head1_off.into()))?;
@@ -46,7 +46,7 @@ impl ParsedBrstm {
         let head3_off = head_base_offset + head.head_chunks[2].head_chunk_offset;
         f.seek(SeekFrom::Start(head3_off.into()))?;
         let head3: Head3 = f.read_be()?;
-        let head2_tracks = head2.track_info.len();
+        let head2_tracks = head2.track_info_offsets.len();
         let head3_tracks = head3.info_offsets.len();
         let mut tracks = Vec::with_capacity(head2_tracks);
         let mut channels = Vec::with_capacity(head3_tracks);
@@ -57,20 +57,20 @@ impl ParsedBrstm {
             let adpcm_info: AdpcmChannelInformation = f.read_be()?;
             channels.push(adpcm_info);
         }
-        for (idx, track_desc_off) in head2.track_info.iter().enumerate() {
-            if track_desc_off.track_desc_type != head2.track_desc_type {
+        for (idx, track_desc_off) in head2.track_info_offsets.iter().enumerate() {
+            if track_desc_off.track_info_type != head2.track_info_type {
                 return Err(binrw::Error::AssertFail {
                     pos: 0,
                     message: format!(
                         "Differing track description type for channel {idx}: {} vs {}",
-                        track_desc_off.track_desc_type, head2.track_desc_type
+                        track_desc_off.track_info_type, head2.track_info_type
                     ),
                 });
             }
             f.seek(SeekFrom::Start(
-                (head_base_offset + track_desc_off.track_description_offset).into(),
+                (head_base_offset + track_desc_off.offset).into(),
             ))?;
-            let track = f.read_be_args::<TrackDescription>((track_desc_off.track_desc_type,))?;
+            let track = f.read_be_args::<TrackDescription>((track_desc_off.track_info_type,))?;
 
             tracks.push(track);
         }
@@ -91,7 +91,6 @@ impl ParsedBrstm {
 
     pub fn write_brstm<WS: Write + Seek>(&self, ws: &mut WS) -> binrw::BinResult<()> {
         ws.seek(SeekFrom::Start(0))?;
-        let channels_per_track = self.tracks[0].track_channel.channels();
         let channel_count = self.channels.len() as u32;
         let any_has_v1 = self.tracks.iter().any(|t| t.get_version() == 1);
         let track_desc_bytes = if any_has_v1 { 12 } else { 4 };
@@ -106,7 +105,7 @@ impl ParsedBrstm {
         // }
         // first, calculate all offsets
         let head_header_off = align_next_32(BrstmHeader::byte_len());
-        let head1_off = head_header_off + Head::byte_len();
+        let head1_off = head_header_off + HeadSectionHeader::byte_len();
         let head2_off = head1_off + Head1::byte_len();
         let track_infos_off = head2_off + Head2::byte_len(self.tracks.len() as u32);
         let head3_off = track_infos_off + self.tracks.len() as u32 * track_desc_bytes;
@@ -130,17 +129,17 @@ impl ParsedBrstm {
         ws.seek(SeekFrom::Start(0))?;
         ws.write_be(&header)?;
 
-        let head_header = Head {
+        let head_header = HeadSectionHeader {
             head_chunk_size: adpcm_section_off - head_header_off,
             head_chunks: [
                 // everything is relative to the HEAD section start + 8
-                HeadChunkDefs {
+                HeadChunkOffsets {
                     head_chunk_offset: head1_off - head_header_off - 8,
                 },
-                HeadChunkDefs {
+                HeadChunkOffsets {
                     head_chunk_offset: head2_off - head_header_off - 8,
                 },
-                HeadChunkDefs {
+                HeadChunkOffsets {
                     head_chunk_offset: head3_off - head_header_off - 8,
                 },
             ],
@@ -156,8 +155,8 @@ impl ParsedBrstm {
         ws.seek(SeekFrom::Start(head1_off.into()))?;
         ws.write_be(&head1)?;
 
-        let mut track_desc_offs = Vec::with_capacity(self.tracks.len());
-        let track_desc_type = if any_has_v1 { 1 } else { 0 };
+        let mut track_info_offsets = Vec::with_capacity(self.tracks.len());
+        let track_info_type = if any_has_v1 { 1 } else { 0 };
         let default_v1 = || {
             if any_has_v1 {
                 Some(TrackDescriptionV1 {
@@ -171,9 +170,9 @@ impl ParsedBrstm {
         ws.seek(SeekFrom::Start(track_infos_off.into()))?;
         for track in self.tracks.iter() {
             let off = ws.stream_position()? as u32;
-            track_desc_offs.push(TrackDescriptionOffset {
-                track_desc_type,
-                track_description_offset: off - head_header_off - 8,
+            track_info_offsets.push(TrackInfoOffset {
+                track_info_type,
+                offset: off - head_header_off - 8,
             });
             let info_v1 = track.info_v1.clone().or_else(default_v1);
             ws.write_be(&TrackDescription {
@@ -183,8 +182,8 @@ impl ParsedBrstm {
         }
 
         let head2 = Head2 {
-            track_desc_type,
-            track_info: track_desc_offs,
+            track_info_type,
+            track_info_offsets,
         };
         ws.seek(SeekFrom::Start(head2_off.into()))?;
         ws.write_be(&head2)?;
@@ -193,7 +192,7 @@ impl ParsedBrstm {
         ws.seek(SeekFrom::Start(channel_infos_off.into()))?;
         for channel in self.channels.iter() {
             let off = ws.stream_position()? as u32;
-            channel_info_offs.push(Head3ChannelInfoOffset {
+            channel_info_offs.push(ChannelInfoOffset {
                 offset: off - head_header_off - 8,
             });
             ws.write_be(&AdpcmChannelInformation {
@@ -234,7 +233,7 @@ impl ParsedBrstm {
         self.channels.push(new_chan_l);
         self.channels.push(new_chan_r);
         let mut new = self.tracks[0].clone();
-        new.track_channel = TrackChannel::Stereo(2, 3);
+        new.channels = Channels::Stereo(2, 3);
         self.tracks.push(new);
         // duplicate all the data
         let mut adpc_dupl = Vec::with_capacity(self.adpcm_section.len() * 2);
@@ -282,7 +281,7 @@ impl ParsedBrstm {
         self.channels.push(new_chan_l);
         self.channels.push(new_chan_r);
         let mut new = self.tracks[0].clone();
-        new.track_channel = TrackChannel::Stereo(2, 3);
+        new.channels = Channels::Stereo(2, 3);
         self.tracks.push(new);
         // duplicate all the data
         let mut adpc_dupl = Vec::with_capacity(self.adpcm_section.len() * 2);
@@ -357,7 +356,6 @@ impl ParsedBrstm {
         assert_eq!(4, self.info.adpc_bytes_per_entry);
         // decode single block
         //
-        let mut adpc_offset = 0;
         let mut data_offset = 0;
         let read_yn = |offset: &mut usize| {
             let yn1 = i16::from_be_bytes(self.adpcm_section[*offset..][..2].try_into().unwrap());
@@ -368,7 +366,7 @@ impl ParsedBrstm {
         };
         for block_index in 0..self.info.total_blocks {
             // skip other channels
-            adpc_offset =
+            let mut adpc_offset =
                 block_index as usize * 4 * self.info.num_channels as usize + channel as usize * 4;
             // get yn values
             let (yn1, yn2) = read_yn(&mut adpc_offset);
