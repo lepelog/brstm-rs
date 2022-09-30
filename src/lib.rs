@@ -1,6 +1,6 @@
 pub mod brstm;
-pub mod structs;
 mod reshaper;
+pub mod structs;
 
 #[cfg(test)]
 mod tests {}

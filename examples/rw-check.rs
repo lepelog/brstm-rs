@@ -13,7 +13,9 @@ pub fn main() {
         let mut cursor = Cursor::new(&orig);
         let parsed = BrstmInformation::from_reader(&mut cursor).unwrap();
         let data_parsed = parsed.into_with_data(&mut cursor).unwrap();
-        data_parsed.write_brstm(&mut Cursor::new(&mut dest)).unwrap();
+        data_parsed
+            .write_brstm(&mut Cursor::new(&mut dest))
+            .unwrap();
         if orig != dest {
             println!("missmatch: {src}");
         }

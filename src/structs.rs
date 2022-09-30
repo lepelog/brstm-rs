@@ -71,6 +71,7 @@ impl HeadSectionHeader {
 
 #[binrw]
 #[brw(big)]
+#[br(assert(adpc_bytes_per_entry == 4))]
 #[derive(Debug, Default, Clone)]
 pub struct Head1 {
     pub codec: u8,
@@ -137,11 +138,20 @@ impl TrackInfoOffset {
 
 #[binrw]
 #[brw(big)]
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct TrackDescriptionV1 {
     pub track_volume: u8,
     #[brw(pad_after = 6)]
     pub track_panning: u8,
+}
+
+impl Default for TrackDescriptionV1 {
+    fn default() -> Self {
+        Self {
+            track_volume: 0x7F,
+            track_panning: 64,
+        }
+    }
 }
 
 #[binrw]
