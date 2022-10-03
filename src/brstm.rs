@@ -2,15 +2,10 @@ use std::io::{self, Read, Seek, SeekFrom, Write};
 
 use binrw::{BinReaderExt, BinResult, BinWriterExt};
 
-use thiserror::Error;
-
-use crate::{
-    reshaper::ReshapeSrc,
-    structs::{
-        AdpcHeader, AdpcmChannelInformation, BrstmHeader, ChannelInfoOffset, Channels, DataHeader,
-        Head1, Head2, Head3, HeadChunkOffsets, HeadSectionHeader, TrackDescription,
-        TrackDescriptionV1, TrackInfoOffset,
-    },
+use crate::structs::{
+    AdpcHeader, AdpcmChannelInformation, BrstmHeader, ChannelInfoOffset, Channels, DataHeader,
+    Head1, Head2, Head3, HeadChunkOffsets, HeadSectionHeader, TrackDescription, TrackDescriptionV1,
+    TrackInfoOffset,
 };
 
 fn align_next_32(off: u32) -> u32 {
@@ -27,16 +22,6 @@ pub struct BrstmInformation {
     adpcm_size: u32,
     data_offset: u32,
     data_size: u32,
-}
-
-#[derive(Error, Debug)]
-pub enum ReshapeError {
-    #[error("Song is not stereo")]
-    NotStereo,
-    #[error("Referenced Track doesn't exist")]
-    TrackNotExistent,
-    #[error("Referenced Channel doesn't exist")]
-    ChannelNotExistent,
 }
 
 impl BrstmInformation {
@@ -112,15 +97,6 @@ impl BrstmInformation {
 
         let adpc_section_len = adpcm_bytes.len() as u32 + 8;
         let adpc_section_len_aligned = align_next_32(adpc_section_len);
-        // sanity check
-        // for track in self.tracks.iter().skip(1) {
-        //     if channels_per_track != track.track_channel.channels() {
-        //         return Err(binrw::Error::AssertFail {
-        //             pos: 0,
-        //             message: "Different channel sizes per track!".into(),
-        //         });
-        //     }
-        // }
         // first, calculate all offsets
         let head_header_off = align_next_32(BrstmHeader::byte_len());
         let head1_off = head_header_off + HeadSectionHeader::byte_len();
@@ -266,9 +242,9 @@ impl BrstmInformation {
 }
 
 pub struct BrstmInfoWithData {
-    info: BrstmInformation,
-    adpcm_bytes: Vec<u8>,
-    data_bytes: Vec<u8>,
+    pub info: BrstmInformation,
+    pub adpcm_bytes: Vec<u8>,
+    pub data_bytes: Vec<u8>,
 }
 
 impl BrstmInfoWithData {
@@ -373,109 +349,6 @@ impl BrstmInfoWithData {
             }
             true
         });
-    }
-
-    pub fn reshape(&mut self, track_reshape: &Vec<ReshapeSrc>) -> Result<(), ReshapeError> {
-        if !self
-            .info
-            .tracks
-            .iter()
-            .all(|track| track.channels.channels() == 2)
-        {
-            return Err(ReshapeError::NotStereo);
-        }
-        // first, figure out how channels need to be reshaped
-        let mut channel_reshape = Vec::new();
-        let mut cur_channel_idx = 0;
-        let mut new_tracks = Vec::new();
-        let mut new_channels = Vec::new();
-        for track in track_reshape.iter() {
-            match &track {
-                ReshapeSrc::Track(track_ref) => {
-                    let src_track = self
-                        .info
-                        .tracks
-                        .get(*track_ref as usize)
-                        .ok_or_else(|| ReshapeError::TrackNotExistent)?;
-                    match &src_track.channels {
-                        Channels::Stereo(left, right) => {
-                            channel_reshape.push(ReshapeSrc::Track(*left));
-                            channel_reshape.push(ReshapeSrc::Track(*right));
-                            new_tracks.push(TrackDescription {
-                                info_v1: src_track.info_v1.clone(),
-                                channels: Channels::Stereo(cur_channel_idx, cur_channel_idx + 1),
-                            });
-                            cur_channel_idx += 2;
-
-                            let left_channel = self
-                                .info
-                                .channels
-                                .get(*left as usize)
-                                .ok_or_else(|| ReshapeError::TrackNotExistent)?;
-                            new_channels.push(left_channel.clone());
-                            let right_channel = self
-                                .info
-                                .channels
-                                .get(*right as usize)
-                                .ok_or_else(|| ReshapeError::TrackNotExistent)?;
-                            new_channels.push(right_channel.clone());
-                        }
-                        Channels::Mono(_) => unreachable!(),
-                    }
-                }
-                ReshapeSrc::Empty => {
-                    channel_reshape.push(ReshapeSrc::Empty);
-                    channel_reshape.push(ReshapeSrc::Empty);
-                    new_tracks.push(TrackDescription {
-                        info_v1: None,
-                        channels: Channels::Stereo(cur_channel_idx, cur_channel_idx + 1),
-                    });
-                    cur_channel_idx += 2;
-
-                    new_channels.push(AdpcmChannelInformation::default());
-                    new_channels.push(AdpcmChannelInformation::default());
-                }
-            }
-        }
-        self.info.info.num_channels = new_channels.len() as u8;
-
-        // new data
-        let mut adpc_bytes =
-            Vec::with_capacity(new_channels.len() * self.info.info.total_blocks as usize * 4);
-        let mut data_bytes = Vec::with_capacity(
-            new_channels.len()
-                * (self.info.info.total_blocks.saturating_sub(1) as usize
-                    * self.info.info.blocks_size as usize
-                    + self.info.info.final_block_size_padded as usize),
-        );
-        for block_index in 0..self.info.info.total_blocks {
-            let block_size = if block_index == self.info.info.total_blocks - 1 {
-                self.info.info.final_block_size_padded
-            } else {
-                self.info.info.blocks_size
-            };
-            for channel in channel_reshape.iter() {
-                match channel {
-                    ReshapeSrc::Empty => {
-                        adpc_bytes.extend_from_slice(&[0; 4]);
-                        // seems to be the best way to extend the vec with empty bytes
-                        data_bytes.resize(data_bytes.len() + block_size as usize, 0);
-                    }
-                    ReshapeSrc::Track(channel_ref) => {
-                        adpc_bytes
-                            .extend_from_slice(self.get_adpc_bytes(*channel_ref, block_index));
-                        data_bytes
-                            .extend_from_slice(self.get_data_block(*channel_ref, block_index));
-                    }
-                }
-            }
-        }
-        // overwrite old values
-        self.data_bytes = data_bytes;
-        self.adpcm_bytes = adpc_bytes;
-        self.info.tracks = new_tracks;
-        self.info.channels = new_channels;
-        Ok(())
     }
 }
 
