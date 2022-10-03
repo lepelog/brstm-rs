@@ -1,0 +1,89 @@
+# see https://github.com/nicolas-van/rust-cross-compile-example/blob/main/.github/workflows/rust.yml
+name: Rust
+
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    # necessary for windows
+    shell: bash
+
+jobs:
+  # test:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v2
+  #     - name: Cargo cache
+  #       uses: actions/cache@v2
+  #       with:
+  #         path: |
+  #           ~/.cargo/registry
+  #           ./target
+  #         key: test-cargo-registry
+  #     - name: List
+  #       run: find ./
+  #     - name: Run tests
+  #       run: cargo test --verbose
+
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        # a list of all the targets
+        include:
+          - TARGET: x86_64-unknown-linux-gnu
+            OS: ubuntu-latest
+          - TARGET: x86_64-apple-darwin
+            OS: macos-latest
+          - TARGET: x86_64-pc-windows-msvc
+            OS: windows-latest
+    # needs: test
+    runs-on: ${{ matrix.OS }}
+    env:
+      NAME: music-randomizer # change with the name of your project
+      TARGET: ${{ matrix.TARGET }}
+      OS: ${{ matrix.OS }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Cargo cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ./target
+          key: build-cargo-registry-${{matrix.TARGET}}
+      - name: List
+        run: find ./
+      - name: Install rust target
+        run: rustup target add $TARGET
+      - name: Run build
+        run: cd music-randomizer && cargo build --release --verbose --target $TARGET
+      - name: List target
+        run: find ./target
+      - name: Compress
+        run: |
+          mkdir -p ./artifacts
+          # windows is the only OS using a different convention for executable file name
+          if [[ $OS =~ ^windows.*$ ]]; then
+              EXEC=$NAME.exe
+          else
+              EXEC=$NAME
+          fi
+          if [[ $GITHUB_REF_TYPE =~ ^tag$ ]]; then
+            TAG=$GITHUB_REF_NAME
+          else
+            TAG=$GITHUB_SHA
+          fi
+          mv ./target/$TARGET/release/$EXEC ./$EXEC
+          tar -czf ./artifacts/$NAME-$TARGET-$TAG.tar.gz $EXEC
+      - name: Archive artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: result
+          path: |
+            ./artifacts
