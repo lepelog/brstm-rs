@@ -79,9 +79,10 @@ jobs:
           else
             TAG=$GITHUB_SHA
           fi
+          mv ./target/$TARGET/release/$EXEC ./artifacts
       - name: Archive artifact
         uses: actions/upload-artifact@v2
         with:
-          name: result
+          name: $TARGET
           path: |
-            ./target/$TARGET/release/$EXEC
+            ./artifacts
