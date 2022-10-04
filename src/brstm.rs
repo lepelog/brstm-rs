@@ -12,7 +12,7 @@ fn align_next_32(off: u32) -> u32 {
     (off + 0x1F) & !0x1F
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BrstmInformation {
     pub info: Head1,
     pub tracks: Vec<TrackDescription>,

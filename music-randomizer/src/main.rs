@@ -1,15 +1,12 @@
-use brstm::brstm::BrstmInformation;
 use clap::Parser;
-use rand::{SeedableRng, random};
-use vanilla_info::VanillaInfo;
-use std::{path::PathBuf, process::exit};
+use rand::{random, SeedableRng};
 use rand_pcg::Pcg64;
+use std::{path::PathBuf, process::exit};
 
-use loader::read_music_dir_rec;
-use randomizer::{execute_patches, PatchEntry};
-use reshaper::AdditionalTracksType;
+use loader::read_all_music_packs;
+use randomizer::execute_patches;
 
-use crate::randomizer::randomize;
+use crate::randomizer::randomize2;
 
 mod loader;
 mod randomizer;
@@ -65,33 +62,11 @@ fn main() {
         exit(1);
     }
 
-    let mut custom_looping = Vec::new();
-    let mut custom_short_nonloop = Vec::new();
-    let mut custom_long_nonloop = Vec::new();
-    read_music_dir_rec(&custom_dir, 5, &mut custom_looping, &mut custom_short_nonloop, &mut custom_long_nonloop).unwrap();
+    let mut rng = Pcg64::seed_from_u64(args.seed.unwrap_or_else(random));
 
-    let (looping_vanilla, short_vanilla, long_vanilla) = vanilla_info::load();
+    let music_packs = read_all_music_packs(&custom_dir).unwrap();
+    let vanilla_songs = vanilla_info::load();
 
-    let mut rng = Pcg64::seed_from_u64(args.seed.unwrap_or_else(|| random()));
-
-    let mut do_handle = |mut custom: Vec<(PathBuf, BrstmInformation)>, vanilla: &Vec<VanillaInfo>| {
-        println!(
-            "custom music: {}, vanilla: {}",
-            custom.len(),
-            vanilla.len()
-        );
-
-        custom.sort_by(|(p1, _), (p2, _)| p1.file_name().unwrap().cmp(p2.file_name().unwrap()));
-
-        let custom_mapped = custom.into_iter().map(|(path, info)| {
-            (path, AdditionalTracksType::from(&info))
-        }).collect();
-
-        let patches = randomize(&mut rng, vanilla, &custom_mapped, &vanilla_dir);
-        execute_patches(&patches, &dest_dir).unwrap();
-    };
-
-    do_handle(custom_looping, &looping_vanilla);
-    do_handle(custom_short_nonloop, &short_vanilla);
-    do_handle(custom_long_nonloop, &long_vanilla);
+    let patches = randomize2(&mut rng, vanilla_songs, music_packs);
+    execute_patches(patches, &vanilla_dir, &dest_dir).unwrap();
 }

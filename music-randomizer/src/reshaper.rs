@@ -29,7 +29,6 @@ pub enum AdditionalTracksType {
     NormalNormal,
     AdditiveAdditive,
     NormalAdditive,
-    NormalNormalNormal,
 }
 
 ///
@@ -57,7 +56,6 @@ impl AdditionalTracksType {
             Self::NormalNormal => &[Normal, Normal],
             Self::AdditiveAdditive => &[Additive, Additive],
             Self::NormalAdditive => &[Normal, Additive],
-            Self::NormalNormalNormal => &[Normal, Normal, Normal],
         }
     }
 
@@ -72,12 +70,10 @@ impl AdditionalTracksType {
             _ => unreachable!(),
         }
     }
-}
 
-// we assume all are normal tracks
-impl From<&BrstmInformation> for AdditionalTracksType {
-    fn from(info: &BrstmInformation) -> Self {
-        match info.tracks.len() {
+    // we assume all are normal tracks
+    pub fn categorize(brstm: &BrstmInformation) -> Self {
+        match brstm.tracks.len() {
             1 => Self::None,
             2 => Self::Normal,
             3 => Self::NormalNormal,
@@ -116,7 +112,7 @@ pub fn calc_reshape(original: &AdditionalTracks, new: &AdditionalTracks) -> Vec<
             }
             AdditionalTrackKind::Additive => orig_additive_tracks
                 .next()
-                .map(|t| ReshapeSrc::Track(t))
+                .map(ReshapeSrc::Track)
                 .unwrap_or(ReshapeSrc::Empty),
         };
         result.push(reshape_entry);
@@ -126,7 +122,7 @@ pub fn calc_reshape(original: &AdditionalTracks, new: &AdditionalTracks) -> Vec<
 
 pub fn reshape(
     brstm: &mut BrstmInfoWithData,
-    track_reshape: &Vec<ReshapeSrc>,
+    track_reshape: &[ReshapeSrc],
 ) -> Result<(), ReshapeError> {
     if !brstm
         .info
@@ -148,7 +144,7 @@ pub fn reshape(
                     .info
                     .tracks
                     .get(*track_ref as usize)
-                    .ok_or_else(|| ReshapeError::TrackNotExistent)?;
+                    .ok_or(ReshapeError::TrackNotExistent)?;
                 match &src_track.channels {
                     Channels::Stereo(left, right) => {
                         channel_reshape.push(ReshapeSrc::Track(*left));
@@ -163,13 +159,13 @@ pub fn reshape(
                             .info
                             .channels
                             .get(*left as usize)
-                            .ok_or_else(|| ReshapeError::TrackNotExistent)?;
+                            .ok_or(ReshapeError::ChannelNotExistent)?;
                         new_channels.push(left_channel.clone());
                         let right_channel = brstm
                             .info
                             .channels
                             .get(*right as usize)
-                            .ok_or_else(|| ReshapeError::TrackNotExistent)?;
+                            .ok_or(ReshapeError::ChannelNotExistent)?;
                         new_channels.push(right_channel.clone());
                     }
                     Channels::Mono(_) => unreachable!(),

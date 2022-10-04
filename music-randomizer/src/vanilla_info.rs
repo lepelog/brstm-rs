@@ -1,4 +1,4 @@
-use crate::reshaper::AdditionalTracksType;
+use crate::{loader::SongCategory, reshaper::AdditionalTracksType};
 
 const VANILLA_INFO: &[(&str, bool, u32, u32)] = &[
     ("10BAB99AF131BF0979699BFEFCC44EA8", false, 32, 11),
@@ -162,7 +162,7 @@ const VANILLA_INFO: &[(&str, bool, u32, u32)] = &[
     ("43B0749044A1FBEC4FDD79628260F468", true, 2644718, 7),
     ("F2815ADBDE30C00084B10966B9DCEC83", true, 2644718, 7),
     ("9C1A4520DB787B4DEB030BCCC807D294", true, 2644821, 1),
-    ("F750507AF4CB3758DECE7CEC185EBD91", true, 2655726, 6),
+    ("F750507AF4CB3758DECE7CEC185EBD91", true, 2655726, 7),
     ("380DAE639D85849FF25624A3A3605577", true, 2655726, 6),
     ("2EF6EAC7A9EB2FC2E7874C715A8BAAFA", true, 2655726, 6),
     ("F30ED52FE88E8AA38C2876ADCC1ABDF6", false, 2656000, 3),
@@ -241,29 +241,34 @@ const VANILLA_INFO: &[(&str, bool, u32, u32)] = &[
     ("203E8B46B79916CD0ADB7693AE2B0E0B", true, 5587805, 4),
 ];
 
+#[derive(Debug, Clone)]
 pub struct VanillaInfo {
     pub name: &'static str,
-    pub additional_tracks: AdditionalTracksType,
+    pub category: SongCategory,
+    pub add_tracks_type: AdditionalTracksType,
 }
 
 // looping, short nonloop, long nonloop
-pub fn load() -> (Vec<VanillaInfo>, Vec<VanillaInfo>, Vec<VanillaInfo>) {
-    let mut looping_songs = Vec::new();
-    let mut short_songs = Vec::new();
-    let mut long_songs = Vec::new();
+pub fn load() -> Vec<VanillaInfo> {
+    let mut songs = Vec::new();
     for (name, looping, samples, typ) in VANILLA_INFO.iter() {
-        let list = if *looping {
-            &mut looping_songs
+        if *typ == 11 {
+            // always vanilla
+            continue;
+        }
+        let category = if *looping {
+            SongCategory::Looping
         } else if *samples < 99300 {
-            &mut short_songs
+            SongCategory::ShortNonLooping
         } else {
-            &mut long_songs
+            SongCategory::NonLooping
         };
         let additional_tracks = AdditionalTracksType::parse_type_number(*typ as usize);
-        list.push(VanillaInfo {
+        songs.push(VanillaInfo {
             name: *name,
-            additional_tracks,
+            category,
+            add_tracks_type: additional_tracks,
         })
     }
-    (looping_songs, short_songs, long_songs)
+    songs
 }
