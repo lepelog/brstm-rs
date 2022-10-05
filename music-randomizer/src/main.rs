@@ -6,7 +6,7 @@ use std::{path::PathBuf, process::exit};
 use loader::read_all_music_packs;
 use randomizer::execute_patches;
 
-use crate::randomizer::randomize2;
+use crate::randomizer::randomize;
 
 mod loader;
 mod randomizer;
@@ -14,13 +14,20 @@ mod reshaper;
 mod vanilla_info;
 
 #[derive(Parser)]
+/// Music randomizer for Skyward Sword
 pub struct Args {
     #[arg(short, long)]
-    /// seed for randomization, default random
+    /// Seed for randomization, default random
     seed: Option<u64>,
-    #[arg(short, long)]
-    /// the randomizer directory, current directory by default
+    #[arg(short = 'p', long)]
+    /// The randomizer directory, current directory by default
     base_path: Option<PathBuf>,
+    #[arg(short, long)]
+    /// Ignore specific replacements and shuffle all
+    random: bool,
+    #[arg(short, long)]
+    /// Allow duplicating songs instead of using songs from vanilla
+    limit_vanilla: bool,
 }
 
 fn main() {
@@ -67,6 +74,12 @@ fn main() {
     let music_packs = read_all_music_packs(&custom_dir).unwrap();
     let vanilla_songs = vanilla_info::load();
 
-    let patches = randomize2(&mut rng, vanilla_songs, music_packs);
+    let patches = randomize(
+        &mut rng,
+        vanilla_songs,
+        music_packs,
+        args.random,
+        args.limit_vanilla,
+    );
     execute_patches(patches, &vanilla_dir, &dest_dir).unwrap();
 }

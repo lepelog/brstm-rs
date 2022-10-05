@@ -39,45 +39,55 @@ fn construct_path(base: &Path, name: &str) -> PathBuf {
     tmp
 }
 
-pub fn randomize2<R: Rng>(
+pub fn randomize<R: Rng>(
     rng: &mut R,
     mut vanilla_songs: Vec<VanillaInfo>,
     music_packs: Vec<MusicPack>,
+    shuffle_all: bool,
+    limit_vanilla: bool,
 ) -> Vec<PatchEntry> {
     let mut patches = Vec::new();
     // pool of songs that can be freely randomized
     let mut randomized_pool = Vec::new();
-    // first, add the requested replacements
-    let mut replacements: HashMap<String, Box<CustomMusicInfo>> = HashMap::new();
-    // earlier packs have higher priority
-    for pack in music_packs.into_iter() {
-        randomized_pool.extend(pack.songs);
-        for (vanilla_name, replacement) in pack.replacements {
-            match replacements.entry(vanilla_name) {
-                Entry::Occupied(_) => {
-                    // if it's already occupied, it will be randomized
-                    randomized_pool.push(replacement);
-                }
-                Entry::Vacant(vac) => {
-                    vac.insert(replacement);
+    // the random setting ignores replacement requests
+    if shuffle_all {
+        for pack in music_packs.into_iter() {
+            randomized_pool.extend(pack.songs);
+            randomized_pool.extend(pack.replacements.into_values());
+        }
+    } else {
+        // first, add the requested replacements
+        let mut replacements: HashMap<String, Box<CustomMusicInfo>> = HashMap::new();
+        // earlier packs have higher priority
+        for pack in music_packs.into_iter() {
+            randomized_pool.extend(pack.songs);
+            for (vanilla_name, replacement) in pack.replacements {
+                match replacements.entry(vanilla_name) {
+                    Entry::Occupied(_) => {
+                        // if it's already occupied, it will be randomized
+                        randomized_pool.push(replacement);
+                    }
+                    Entry::Vacant(vac) => {
+                        vac.insert(replacement);
+                    }
                 }
             }
         }
-    }
-    // we can iterate on this map since we sort the randomized_pool afterwards
-    for (vanilla_name, custom) in replacements {
-        // find the file in the pack
-        // hopefully this is fast enough
-        if let Some(pos) = vanilla_songs.iter().position(|s| s.name == vanilla_name) {
-            patches.push(PatchEntry {
-                vanilla: vanilla_songs.swap_remove(pos),
-                custom: PatchTarget::Custom(custom),
-            })
-        } else {
-            // name is not found, just randomize it
-            // TODO: better error handling
-            eprintln!("vanilla song {vanilla_name} doesn't exist!");
-            randomized_pool.push(custom);
+        // we can iterate on this map since we sort the randomized_pool afterwards
+        for (vanilla_name, custom) in replacements {
+            // find the file in the pack
+            // hopefully this is fast enough
+            if let Some(pos) = vanilla_songs.iter().position(|s| s.name == vanilla_name) {
+                patches.push(PatchEntry {
+                    vanilla: vanilla_songs.swap_remove(pos),
+                    custom: PatchTarget::Custom(custom),
+                })
+            } else {
+                // name is not found, just randomize it
+                // TODO: better error handling
+                eprintln!("vanilla song {vanilla_name} doesn't exist!");
+                randomized_pool.push(custom);
+            }
         }
     }
     randomized_pool.sort_unstable_by(|a, b| a.path.cmp(&b.path));
@@ -105,7 +115,17 @@ pub fn randomize2<R: Rng>(
         };
         list.push(custom);
     }
-    let mut handle = |vanilla_songs: Vec<VanillaInfo>, custom_songs: Vec<Box<CustomMusicInfo>>| {
+    let mut handle = |vanilla_songs: Vec<VanillaInfo>,
+                      mut custom_songs: Vec<Box<CustomMusicInfo>>| {
+        if limit_vanilla {
+            let sample_count = vanilla_songs.len().saturating_sub(custom_songs.len());
+            custom_songs.extend(
+                custom_songs
+                    .choose_multiple(rng, sample_count)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            );
+        }
         let vanilla_fill_necessary = vanilla_songs.len().saturating_sub(custom_songs.len());
         patches.extend(
             vanilla_songs
