@@ -3,7 +3,7 @@ use std::{
     io::Cursor,
 };
 
-use brstm::brstm::BrstmInformation;
+use brstm::BrstmInformation;
 
 pub fn main() {
     for src in std::env::args().skip(1) {

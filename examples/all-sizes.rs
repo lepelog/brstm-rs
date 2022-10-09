@@ -1,6 +1,6 @@
 use std::{env::args, fs::File};
 
-use brstm::brstm::BrstmInformation;
+use brstm::BrstmInformation;
 
 pub fn main() {
     let mut name_to_duration = Vec::new();

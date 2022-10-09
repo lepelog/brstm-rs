@@ -1,4 +1,6 @@
-pub mod brstm;
+mod brstm;
+pub use brstm::*;
+pub mod reshaper;
 pub mod structs;
 
 #[derive(Debug)]

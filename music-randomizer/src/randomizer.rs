@@ -4,12 +4,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use brstm::brstm::BrstmInformation;
+use brstm::{
+    reshaper::{calc_reshape, reshape},
+    BrstmInformation,
+};
 use rand::{seq::SliceRandom, Rng};
 
 use crate::{
-    loader::{CustomMusicInfo, MusicPack, SongCategory},
-    reshaper::{calc_reshape, reshape, AdditionalTracksType},
+    loader::{AdditionalTracksType, CustomMusicInfo, MusicPack, SongCategory},
     vanilla_info::VanillaInfo,
 };
 #[derive(Debug)]

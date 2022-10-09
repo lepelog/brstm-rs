@@ -6,9 +6,72 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use brstm::brstm::BrstmInformation;
+use brstm::{
+    reshaper::{AdditionalTrackKind, AdditionalTracks},
+    BrstmInformation,
+};
 
-use crate::reshaper::AdditionalTracksType;
+#[derive(Debug, Clone, Copy)]
+pub enum AdditionalTracksType {
+    None,
+    Normal,
+    Additive,
+    NormalNormal,
+    AdditiveAdditive,
+    NormalAdditive,
+}
+
+///
+/// 1 stage
+/// 2 cs loop
+/// 3 cs no loop
+/// 4 2stream
+/// 5 2 stream add
+/// 6 3 stream
+/// 7 3 stream add
+/// 8 fanfare
+/// 9 effect
+/// 10 other
+/// 11 vanilla
+/// 12 2 add nonloop
+/// 13 3 (2std,3 add)
+
+impl AdditionalTracksType {
+    pub fn as_additional_tracks(&self) -> &'static AdditionalTracks {
+        use AdditionalTrackKind::*;
+        match self {
+            Self::None => &[],
+            Self::Normal => &[Normal],
+            Self::Additive => &[Additive],
+            Self::NormalNormal => &[Normal, Normal],
+            Self::AdditiveAdditive => &[Additive, Additive],
+            Self::NormalAdditive => &[Normal, Additive],
+        }
+    }
+
+    pub fn parse_type_number(typ: usize) -> Self {
+        match typ {
+            1 | 2 | 3 | 8 | 9 | 10 | 11 => Self::None,
+            4 => Self::Normal,
+            5 | 12 => Self::Additive,
+            6 => Self::NormalNormal,
+            7 => Self::AdditiveAdditive,
+            13 => Self::NormalAdditive,
+            _ => unreachable!(),
+        }
+    }
+
+    // we assume all are normal tracks
+    pub fn categorize(brstm: &BrstmInformation) -> Self {
+        match brstm.tracks.len() {
+            1 => Self::None,
+            2 => Self::Normal,
+            3 => Self::NormalNormal,
+            // TODO, try into with error
+            _ => unreachable!(),
+        }
+    }
+}
 
 // categories that are not allowed to be shuffled with each other
 #[derive(Debug, Clone, Copy)]

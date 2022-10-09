@@ -1,4 +1,4 @@
-use crate::{loader::SongCategory, reshaper::AdditionalTracksType};
+use crate::loader::{AdditionalTracksType, SongCategory};
 
 const VANILLA_INFO: &[(&str, bool, u32, u32)] = &[
     ("10BAB99AF131BF0979699BFEFCC44EA8", false, 32, 11),

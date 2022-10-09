@@ -10,7 +10,6 @@ use crate::randomizer::randomize;
 
 mod loader;
 mod randomizer;
-mod reshaper;
 mod vanilla_info;
 
 #[derive(Parser)]
