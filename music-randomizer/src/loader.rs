@@ -112,7 +112,15 @@ pub fn read_all_music_packs(dir: &Path) -> binrw::BinResult<Vec<MusicPack>> {
     for result in fs::read_dir(dir)? {
         let entry = result?;
         if entry.metadata()?.is_dir() {
-            dirs.push(entry.path());
+            // ignore hidden directories and directories starting with '_'
+            // also ignore non UTF-8 cause idk how to deal with that otherwise
+            if entry
+                .file_name()
+                .to_str()
+                .map_or(false, |n| !n.starts_with('_') && !n.starts_with('.'))
+            {
+                dirs.push(entry.path());
+            }
         }
     }
     dirs.sort();
@@ -190,7 +198,8 @@ pub fn read_music_dir_rec(
                 } else if path_meta.is_file() && path.extension().map_or(false, |e| e == "brstm") {
                     let read_file = || -> binrw::BinResult<_> {
                         let mut f = File::open(&path)?;
-                        let result = BrstmInformation::from_reader(&mut f)?;
+                        let mut result = BrstmInformation::from_reader(&mut f)?;
+                        result.fix_tracks();
                         Ok(result)
                     };
                     match read_file() {

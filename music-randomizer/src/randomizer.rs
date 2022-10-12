@@ -180,7 +180,6 @@ pub fn execute_patches(
                 BrstmInformation::from_reader(&mut f)?.into_with_data(&mut f)?
             }
         };
-        new_song.fix_tracks();
         // TODO error handling
         // println!("{reshape_def:?}");
         match reshape(&mut new_song, &reshape_def) {

@@ -226,6 +226,35 @@ impl BrstmInformation {
         self.channels.len() as u8
     }
 
+    /// fixes songs with tracks that point to invalid channels
+    /// returns if tracks had to be fixed
+    pub fn fix_tracks(&mut self) -> bool {
+        self.info.num_channels = self.channels.len() as u8;
+        let mut made_change = false;
+        self.tracks.retain(|track| {
+            match &track.channels {
+                Channels::Mono(channel) => {
+                    if *channel >= self.info.num_channels {
+                        made_change = true;
+                        return false;
+                    }
+                }
+                Channels::Stereo(left, right) => {
+                    if *left >= self.info.num_channels {
+                        made_change = true;
+                        return false;
+                    }
+                    if *right >= self.info.num_channels {
+                        made_change = true;
+                        return false;
+                    }
+                }
+            }
+            true
+        });
+        made_change
+    }
+
     pub fn into_with_data<RS: Read + Seek>(self, f: &mut RS) -> io::Result<BrstmInfoWithData> {
         let mut adpcm_bytes = vec![0; self.adpcm_size as usize];
         f.seek(SeekFrom::Start(self.adpcm_offset.into()))?;
@@ -326,29 +355,6 @@ impl BrstmInfoWithData {
         }
 
         result
-    }
-
-    /// fixes songs with tracks that point to invalid channels
-    pub fn fix_tracks(&mut self) {
-        self.info.info.num_channels = self.info.channels.len() as u8;
-        self.info.tracks.retain(|track| {
-            match &track.channels {
-                Channels::Mono(channel) => {
-                    if *channel >= self.info.info.num_channels {
-                        return false;
-                    }
-                }
-                Channels::Stereo(left, right) => {
-                    if *left >= self.info.info.num_channels {
-                        return false;
-                    }
-                    if *right >= self.info.info.num_channels {
-                        return false;
-                    }
-                }
-            }
-            true
-        });
     }
 }
 
