@@ -107,6 +107,7 @@ pub fn randomize<R: Rng>(
     info!("{} songs already fixed placed", patches.len());
     randomized_pool.sort_unstable_by(|a, b| a.path.cmp(&b.path));
     randomized_pool.shuffle(rng);
+    vanilla_songs.shuffle(rng);
     // place different types individually
     let mut vanilla_looping_songs = Vec::new();
     let mut vanilla_short_nonlooping_songs = Vec::new();
