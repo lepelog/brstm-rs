@@ -227,31 +227,53 @@ impl BrstmInformation {
     }
 
     /// fixes songs with tracks that point to invalid channels
+    /// or if no tracks exist
     /// returns if tracks had to be fixed
     pub fn fix_tracks(&mut self) -> bool {
         self.info.num_channels = self.channels.len() as u8;
         let mut made_change = false;
-        self.tracks.retain(|track| {
-            match &track.channels {
-                Channels::Mono(channel) => {
-                    if *channel >= self.info.num_channels {
-                        made_change = true;
-                        return false;
-                    }
-                }
-                Channels::Stereo(left, right) => {
-                    if *left >= self.info.num_channels {
-                        made_change = true;
-                        return false;
-                    }
-                    if *right >= self.info.num_channels {
-                        made_change = true;
-                        return false;
-                    }
-                }
+        if self.tracks.len() == 0 && self.channels.len() != 0 {
+            // if it's divisible by 2, assume stereo
+            if self.channels.len() % 2 == 0 {
+                let track_count = self.channels.len() / 2;
+                self.tracks = (0..track_count)
+                    .map(|i| TrackDescription {
+                        channels: Channels::Stereo(i as u8 * 2, i as u8 * 2 + 1),
+                        info_v1: None,
+                    })
+                    .collect();
+            } else {
+                self.tracks = (0..self.channels.len())
+                    .map(|i| TrackDescription {
+                        channels: Channels::Mono(i as u8),
+                        info_v1: None,
+                    })
+                    .collect();
             }
-            true
-        });
+            made_change = true;
+        } else {
+            self.tracks.retain(|track| {
+                match &track.channels {
+                    Channels::Mono(channel) => {
+                        if *channel >= self.info.num_channels {
+                            made_change = true;
+                            return false;
+                        }
+                    }
+                    Channels::Stereo(left, right) => {
+                        if *left >= self.info.num_channels {
+                            made_change = true;
+                            return false;
+                        }
+                        if *right >= self.info.num_channels {
+                            made_change = true;
+                            return false;
+                        }
+                    }
+                }
+                true
+            });
+        }
         made_change
     }
 

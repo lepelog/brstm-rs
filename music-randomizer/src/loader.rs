@@ -11,6 +11,8 @@ use brstm::{
     BrstmInformation,
 };
 
+use log::{debug, error, info};
+
 #[derive(Debug, Clone, Copy)]
 pub enum AdditionalTracksType {
     None,
@@ -112,6 +114,7 @@ pub fn read_all_music_packs(dir: &Path) -> binrw::BinResult<Vec<MusicPack>> {
     for result in fs::read_dir(dir)? {
         let entry = result?;
         if entry.metadata()?.is_dir() {
+            let path = entry.path();
             // ignore hidden directories and directories starting with '_'
             // also ignore non UTF-8 cause idk how to deal with that otherwise
             if entry
@@ -119,7 +122,10 @@ pub fn read_all_music_packs(dir: &Path) -> binrw::BinResult<Vec<MusicPack>> {
                 .to_str()
                 .map_or(false, |n| !n.starts_with('_') && !n.starts_with('.'))
             {
-                dirs.push(entry.path());
+                info!("loading pack {:?}", &path);
+                dirs.push(path);
+            } else {
+                info!("skipping {:?}", &path);
             }
         }
     }
@@ -161,11 +167,12 @@ pub fn read_music_pack(dir: &Path) -> binrw::BinResult<MusicPack> {
                     .iter()
                     .position(|s| s.path.file_name().unwrap() == custom_with_ext)
                 {
+                    debug!("successfully found replacement for {vanilla}: {custom}");
                     replacements.insert(vanilla.to_string(), songs.swap_remove(pos));
                     // println!("success for {vanilla}, {custom}");
                 } else {
                     // TODO: communicate a warning *somehow* better if the file is not found
-                    eprintln!("replacement file {custom} can't be found!");
+                    error!("replacement file {custom} can't be found!");
                 }
             }
         }
@@ -204,6 +211,7 @@ pub fn read_music_dir_rec(
                     };
                     match read_file() {
                         Ok(brstm) => {
+                            debug!("successfully parsed {path:?}");
                             songs.push(
                                 CustomMusicInfo {
                                     path,
@@ -214,7 +222,7 @@ pub fn read_music_dir_rec(
                             );
                         }
                         Err(e) => {
-                            eprintln!("Error reading file: {e:?}");
+                            error!("Error reading file {path:?}: {e:?}");
                         }
                     }
                 }

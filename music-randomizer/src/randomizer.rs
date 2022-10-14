@@ -1,3 +1,4 @@
+use log::{debug, error, info, log_enabled, Level};
 use std::{
     collections::{hash_map::Entry, HashMap},
     fs::File,
@@ -25,6 +26,13 @@ impl PatchTarget {
         match self {
             PatchTarget::Custom(c) => c.add_tracks_type,
             PatchTarget::Vanilla(v) => v.add_tracks_type,
+        }
+    }
+
+    pub fn name(&self) -> Option<&str> {
+        match self {
+            PatchTarget::Custom(c) => c.path.to_str(),
+            PatchTarget::Vanilla(v) => Some(v.name),
         }
     }
 }
@@ -87,13 +95,18 @@ pub fn randomize<R: Rng>(
             } else {
                 // name is not found, just randomize it
                 // TODO: better error handling
-                eprintln!("vanilla song {vanilla_name} doesn't exist!");
+                error!("vanilla song {vanilla_name} doesn't exist!");
                 randomized_pool.push(custom);
             }
         }
     }
+    info!(
+        "randomizing songs with {} in the pool",
+        randomized_pool.len()
+    );
+    info!("{} songs already fixed placed", patches.len());
     randomized_pool.sort_unstable_by(|a, b| a.path.cmp(&b.path));
-    vanilla_songs.shuffle(rng);
+    randomized_pool.shuffle(rng);
     // place different types individually
     let mut vanilla_looping_songs = Vec::new();
     let mut vanilla_short_nonlooping_songs = Vec::new();
@@ -109,6 +122,10 @@ pub fn randomize<R: Rng>(
         };
         list.push(vanilla);
     }
+    info!("vanilla song counts by type:");
+    info!("looping: {}", vanilla_looping_songs.len());
+    info!("nonlooping short: {}", vanilla_short_nonlooping_songs.len());
+    info!("nonlooping long: {}", vanilla_long_nonlooping_songs.len());
     for custom in randomized_pool {
         let list = match SongCategory::categorize(&custom.brstm_info) {
             SongCategory::Looping => &mut custom_looping_songs,
@@ -117,6 +134,10 @@ pub fn randomize<R: Rng>(
         };
         list.push(custom);
     }
+    info!("custom song counts by type:");
+    info!("looping: {}", custom_looping_songs.len());
+    info!("nonlooping short: {}", custom_short_nonlooping_songs.len());
+    info!("nonlooping long: {}", custom_long_nonlooping_songs.len());
     let mut handle = |vanilla_songs: Vec<VanillaInfo>,
                       mut custom_songs: Vec<Box<CustomMusicInfo>>| {
         if limit_vanilla {
@@ -163,8 +184,13 @@ pub fn execute_patches(
     dest_folder: &Path,
 ) -> binrw::BinResult<()> {
     for patch in patches {
-        println!("patching {}", patch.vanilla.name);
-        // println!("patch {:?}", patch);
+        // TODO: this hopefully doesn't actually need a heap allocation
+        let new_name = patch.custom.name().unwrap_or("<<INVALID>>").to_owned();
+        if log_enabled!(Level::Debug) {
+            debug!("replacing {} with {}", patch.vanilla.name, &new_name);
+        } else {
+            info!("patching {}", patch.vanilla.name);
+        }
         let reshape_def = calc_reshape(
             patch.custom.get_add_track_type().as_additional_tracks(),
             patch.vanilla.add_tracks_type.as_additional_tracks(),
@@ -172,8 +198,23 @@ pub fn execute_patches(
 
         let mut new_song = match patch.custom {
             PatchTarget::Custom(c) => {
-                let mut f = File::open(&c.path)?;
-                c.brstm_info.into_with_data(&mut f)?
+                let mut f = match File::open(&c.path) {
+                    Err(e) => {
+                        error!(
+                            "Error opening custom file {} again, skipping: {e:?}",
+                            &new_name
+                        );
+                        continue;
+                    }
+                    Ok(f) => f,
+                };
+                match c.brstm_info.into_with_data(&mut f) {
+                    Err(e) => {
+                        error!("Error reading song from {}, skipping: {e:?}", &new_name);
+                        continue;
+                    }
+                    Ok(f) => f,
+                }
             }
             PatchTarget::Vanilla(v) => {
                 let mut f = File::open(&construct_path(vanilla_path, v.name))?;
@@ -184,10 +225,29 @@ pub fn execute_patches(
         // println!("{reshape_def:?}");
         match reshape(&mut new_song, &reshape_def) {
             Ok(()) => {
-                let mut f = File::create(construct_path(dest_folder, patch.vanilla.name))?;
-                new_song.write_brstm(&mut f)?;
+                let outpath = construct_path(dest_folder, patch.vanilla.name);
+                let mut f = match File::create(&outpath) {
+                    Err(e) => {
+                        error!("could not create outfile {:?}: {e:?}", outpath);
+                        continue;
+                    }
+                    Ok(f) => f,
+                };
+                match new_song.write_brstm(&mut f) {
+                    Err(e) => {
+                        error!(
+                            "failed to write brstm {} to {}: {e:?}",
+                            &new_name, patch.vanilla.name
+                        );
+                        continue;
+                    }
+                    _ => (),
+                };
             }
-            Err(e) => eprintln!("Error: {e:?}"),
+            Err(e) => error!(
+                "Error patching {} with {}: {e:?}",
+                patch.vanilla.name, &new_name
+            ),
         }
     }
     Ok(())

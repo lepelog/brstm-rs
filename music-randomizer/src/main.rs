@@ -1,4 +1,6 @@
 use clap::Parser;
+use env_logger::Env;
+use log::{error, info};
 use rand::{random, SeedableRng};
 use rand_pcg::Pcg64;
 use std::{path::PathBuf, process::exit};
@@ -30,6 +32,8 @@ pub struct Args {
 }
 
 fn main() {
+    let env = Env::new().default_filter_or("info");
+    env_logger::init_from_env(env);
     let args = Args::parse();
     let base_path = args.base_path.unwrap_or_else(|| PathBuf::from("."));
     let vanilla_dir = {
@@ -42,7 +46,7 @@ fn main() {
         tmp
     };
     if !vanilla_dir.exists() {
-        eprintln!("The actual-extract folder doesn't exist or doesn't have the right structure, make sure to place this program next to the rando!");
+        error!("The actual-extract folder doesn't exist or doesn't have the right structure, make sure to place this program next to the rando!");
         exit(1);
     }
     let custom_dir = {
@@ -51,7 +55,7 @@ fn main() {
         tmp
     };
     if !custom_dir.exists() {
-        eprintln!("The custom music directory doesn't exist! Make sure it's named custom-music!");
+        error!("The custom music directory doesn't exist! Make sure it's named custom-music!");
         exit(1);
     }
     let dest_dir = {
@@ -64,10 +68,12 @@ fn main() {
         tmp
     };
     if !dest_dir.exists() {
-        eprintln!("The modified-extract folder doesn't exist or doesn't have the right structure, make sure to place this program next to the rando!");
+        error!("The modified-extract folder doesn't exist or doesn't have the right structure, make sure to place this program next to the rando!");
         exit(1);
     }
 
+    let seed = args.seed.unwrap_or_else(random);
+    info!("using seed {seed}");
     let mut rng = Pcg64::seed_from_u64(args.seed.unwrap_or_else(random));
 
     let music_packs = read_all_music_packs(&custom_dir).unwrap();
