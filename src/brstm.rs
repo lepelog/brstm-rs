@@ -232,7 +232,7 @@ impl BrstmInformation {
     pub fn fix_tracks(&mut self) -> bool {
         self.info.num_channels = self.channels.len() as u8;
         let mut made_change = false;
-        if self.tracks.len() == 0 && self.channels.len() != 0 {
+        if self.tracks.is_empty() && !self.channels.is_empty() {
             // if it's divisible by 2, assume stereo
             if self.channels.len() % 2 == 0 {
                 let track_count = self.channels.len() / 2;

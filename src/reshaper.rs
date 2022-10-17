@@ -5,7 +5,7 @@ use crate::{
 };
 use thiserror::Error;
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum AdditionalTrackKind {
     Normal,
     Additive,
@@ -21,9 +21,10 @@ pub enum ReshapeError {
     ChannelNotExistent,
 }
 
-pub type AdditionalTracks = [AdditionalTrackKind];
-
-pub fn calc_reshape(original: &AdditionalTracks, new: &AdditionalTracks) -> Vec<ReshapeSrc> {
+pub fn calc_reshape(
+    original: &[AdditionalTrackKind],
+    new: &[AdditionalTrackKind],
+) -> Vec<ReshapeSrc> {
     // main track always stays
     let mut result = Vec::with_capacity(new.len() + 1);
     result.push(ReshapeSrc::Track(0));

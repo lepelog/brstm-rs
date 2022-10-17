@@ -1,27 +1,16 @@
 use std::{
+    borrow::Cow,
     collections::HashMap,
     ffi::OsString,
     fs::{self, File},
     io::{BufRead, BufReader},
+    iter::repeat,
     path::{Path, PathBuf},
 };
 
-use brstm::{
-    reshaper::{AdditionalTrackKind, AdditionalTracks},
-    BrstmInformation,
-};
+use brstm::{reshaper::AdditionalTrackKind, BrstmInformation};
 
 use log::{debug, error, info};
-
-#[derive(Debug, Clone, Copy)]
-pub enum AdditionalTracksType {
-    None,
-    Normal,
-    Additive,
-    NormalNormal,
-    AdditiveAdditive,
-    NormalAdditive,
-}
 
 ///
 /// 1 stage
@@ -38,40 +27,20 @@ pub enum AdditionalTracksType {
 /// 12 2 add nonloop
 /// 13 3 (2std,3 add)
 
-impl AdditionalTracksType {
-    pub fn as_additional_tracks(&self) -> &'static AdditionalTracks {
-        use AdditionalTrackKind::*;
-        match self {
-            Self::None => &[],
-            Self::Normal => &[Normal],
-            Self::Additive => &[Additive],
-            Self::NormalNormal => &[Normal, Normal],
-            Self::AdditiveAdditive => &[Additive, Additive],
-            Self::NormalAdditive => &[Normal, Additive],
-        }
-    }
+pub type AdditionalTracks = Cow<'static, [AdditionalTrackKind]>;
 
-    pub fn parse_type_number(typ: usize) -> Self {
-        match typ {
-            1 | 2 | 3 | 8 | 9 | 10 | 11 => Self::None,
-            4 => Self::Normal,
-            5 | 12 => Self::Additive,
-            6 => Self::NormalNormal,
-            7 => Self::AdditiveAdditive,
-            13 => Self::NormalAdditive,
-            _ => unreachable!(),
-        }
-    }
-
-    // we assume all are normal tracks
-    pub fn categorize(brstm: &BrstmInformation) -> Self {
-        match brstm.tracks.len() {
-            1 => Self::None,
-            2 => Self::Normal,
-            3 => Self::NormalNormal,
-            // TODO, try into with error
-            _ => unreachable!(),
-        }
+/// make a Cow with a list of additional tracks, for the count of additional normal tracks
+pub fn make_normal_additional_tracks(add_count: usize) -> AdditionalTracks {
+    use AdditionalTrackKind::*;
+    match add_count {
+        0 => Cow::Borrowed(&[]),
+        1 => Cow::Borrowed(&[Normal]),
+        2 => Cow::Borrowed(&[Normal, Normal]),
+        3 => Cow::Borrowed(&[Normal, Normal, Normal]),
+        4 => Cow::Borrowed(&[Normal, Normal, Normal, Normal]),
+        5 => Cow::Borrowed(&[Normal, Normal, Normal, Normal, Normal]),
+        // allocate a list for the more rare cases
+        num => Cow::Owned(repeat(Normal).take(num).collect()),
     }
 }
 
@@ -100,7 +69,7 @@ impl SongCategory {
 pub struct CustomMusicInfo {
     pub path: PathBuf,
     pub brstm_info: BrstmInformation,
-    pub add_tracks_type: AdditionalTracksType,
+    pub add_tracks: Cow<'static, [AdditionalTrackKind]>,
 }
 
 pub struct MusicPack {
@@ -212,14 +181,22 @@ pub fn read_music_dir_rec(
                     match read_file() {
                         Ok(brstm) => {
                             debug!("successfully parsed {path:?}");
-                            songs.push(
-                                CustomMusicInfo {
-                                    path,
-                                    add_tracks_type: AdditionalTracksType::categorize(&brstm),
-                                    brstm_info: brstm,
-                                }
-                                .into(),
-                            );
+                            if let Some(additional_track_count) = brstm.tracks.len().checked_sub(1)
+                            {
+                                songs.push(
+                                    CustomMusicInfo {
+                                        path,
+                                        // just
+                                        add_tracks: make_normal_additional_tracks(
+                                            additional_track_count,
+                                        ),
+                                        brstm_info: brstm,
+                                    }
+                                    .into(),
+                                );
+                            } else {
+                                error!("File {path:?} has 0 tracks, skipping");
+                            }
                         }
                         Err(e) => {
                             error!("Error reading file {path:?}: {e:?}");

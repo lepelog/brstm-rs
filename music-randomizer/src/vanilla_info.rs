@@ -1,4 +1,6 @@
-use crate::loader::{AdditionalTracksType, SongCategory};
+use brstm::reshaper::AdditionalTrackKind;
+
+use crate::loader::SongCategory;
 
 const VANILLA_INFO: &[(&str, bool, u32, u32)] = &[
     ("10BAB99AF131BF0979699BFEFCC44EA8", false, 32, 11),
@@ -241,11 +243,24 @@ const VANILLA_INFO: &[(&str, bool, u32, u32)] = &[
     ("203E8B46B79916CD0ADB7693AE2B0E0B", true, 5587805, 4),
 ];
 
+pub fn additional_tracks_from_type_num(typ: usize) -> &'static [AdditionalTrackKind] {
+    use AdditionalTrackKind::*;
+    match typ {
+        1 | 2 | 3 | 8 | 9 | 10 | 11 => &[],
+        4 => &[Normal],
+        5 | 12 => &[Additive],
+        6 => &[Normal, Normal],
+        7 => &[Additive, Additive],
+        13 => &[Normal, Additive],
+        _ => unreachable!(),
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct VanillaInfo {
     pub name: &'static str,
     pub category: SongCategory,
-    pub add_tracks_type: AdditionalTracksType,
+    pub add_tracks: &'static [AdditionalTrackKind],
 }
 
 // looping, short nonloop, long nonloop
@@ -263,11 +278,10 @@ pub fn load() -> Vec<VanillaInfo> {
         } else {
             SongCategory::NonLooping
         };
-        let additional_tracks = AdditionalTracksType::parse_type_number(*typ as usize);
         songs.push(VanillaInfo {
             name: *name,
             category,
-            add_tracks_type: additional_tracks,
+            add_tracks: additional_tracks_from_type_num(*typ as usize),
         })
     }
     songs

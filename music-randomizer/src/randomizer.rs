@@ -6,13 +6,13 @@ use std::{
 };
 
 use brstm::{
-    reshaper::{calc_reshape, reshape},
+    reshaper::{calc_reshape, reshape, AdditionalTrackKind},
     BrstmInformation,
 };
 use rand::{seq::SliceRandom, Rng};
 
 use crate::{
-    loader::{AdditionalTracksType, CustomMusicInfo, MusicPack, SongCategory},
+    loader::{CustomMusicInfo, MusicPack, SongCategory},
     vanilla_info::VanillaInfo,
 };
 #[derive(Debug)]
@@ -22,10 +22,10 @@ pub struct PatchEntry {
 }
 
 impl PatchTarget {
-    pub fn get_add_track_type(&self) -> AdditionalTracksType {
+    pub fn get_add_track_type(&self) -> &[AdditionalTrackKind] {
         match self {
-            PatchTarget::Custom(c) => c.add_tracks_type,
-            PatchTarget::Vanilla(v) => v.add_tracks_type,
+            PatchTarget::Custom(c) => c.add_tracks.as_ref(),
+            PatchTarget::Vanilla(v) => v.add_tracks,
         }
     }
 
@@ -192,10 +192,7 @@ pub fn execute_patches(
         } else {
             info!("patching {}", patch.vanilla.name);
         }
-        let reshape_def = calc_reshape(
-            patch.custom.get_add_track_type().as_additional_tracks(),
-            patch.vanilla.add_tracks_type.as_additional_tracks(),
-        );
+        let reshape_def = calc_reshape(patch.custom.get_add_track_type(), patch.vanilla.add_tracks);
 
         let mut new_song = match patch.custom {
             PatchTarget::Custom(c) => {
@@ -234,15 +231,12 @@ pub fn execute_patches(
                     }
                     Ok(f) => f,
                 };
-                match new_song.write_brstm(&mut f) {
-                    Err(e) => {
-                        error!(
-                            "failed to write brstm {} to {}: {e:?}",
-                            &new_name, patch.vanilla.name
-                        );
-                        continue;
-                    }
-                    _ => (),
+                if let Err(e) = new_song.write_brstm(&mut f) {
+                    error!(
+                        "failed to write brstm {} to {}: {e:?}",
+                        &new_name, patch.vanilla.name
+                    );
+                    continue;
                 };
             }
             Err(e) => error!(
