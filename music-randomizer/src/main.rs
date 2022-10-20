@@ -15,6 +15,7 @@ mod randomizer;
 mod vanilla_info;
 
 #[derive(Parser)]
+#[command(version)]
 /// Music randomizer for Skyward Sword
 pub struct Args {
     #[arg(short, long)]
