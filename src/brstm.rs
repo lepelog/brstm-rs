@@ -1,4 +1,4 @@
-use std::io::{self, Read, Seek, SeekFrom, Write};
+use std::{io::{self, Read, Seek, SeekFrom, Write}, iter::repeat};
 
 use binrw::{BinReaderExt, BinResult, BinWriterExt};
 
@@ -226,23 +226,62 @@ impl BrstmInformation {
         self.channels.len() as u8
     }
 
+    pub fn check_tracks_valid(&self) -> bool {
+        // determine if track information is broken:
+        // - channels are referenced that don't exist
+        // - channels exist but aren't referenced
+        let mut referenced_channels: Vec<_> = repeat(false).take(self.channels.len()).collect();
+        // iterate over all tracks, mark each found channel as referenced and return false when a non
+        // existing channel is referenced
+        for track in self.tracks.iter() {
+            match &track.channels {
+                Channels::Mono(channel) => {
+                    if let Some(referenced) = referenced_channels.get_mut(*channel as usize) {
+                        *referenced = true;
+                    } else {
+                        return false;
+                    }
+                },
+                Channels::Stereo(left, right) => {
+                    if let Some(referenced) = referenced_channels.get_mut(*left as usize) {
+                        *referenced = true;
+                    } else {
+                        return false;
+                    }
+                    if let Some(referenced) = referenced_channels.get_mut(*right as usize) {
+                        *referenced = true;
+                    } else {
+                        return false;
+                    }
+                },
+            }
+        }
+        // make sure all channels were referenced
+        referenced_channels.iter().all(|b| *b)
+    }
+
     /// fixes songs with tracks that point to invalid channels
     /// or if no tracks exist
     /// returns if tracks had to be fixed
     pub fn fix_tracks(&mut self) -> bool {
-        self.info.num_channels = self.channels.len() as u8;
         let mut made_change = false;
-        if self.tracks.is_empty() && !self.channels.is_empty() {
-            // if it's divisible by 2, assume stereo
-            if self.channels.len() % 2 == 0 {
-                let track_count = self.channels.len() / 2;
-                self.tracks = (0..track_count)
+        if self.info.num_channels != self.channels.len() as u8 {
+            self.info.num_channels = self.channels.len() as u8;
+            made_change = true;
+        }
+        if !self.check_tracks_valid() {
+            // rebuild tracks
+            // first, guess if it's stereo or mono
+            if self.channels.len() > 1 && self.channels.len() % 2 == 0 {
+                // Stereo
+                self.tracks = (0..self.channels.len()/2)
                     .map(|i| TrackDescription {
                         channels: Channels::Stereo(i as u8 * 2, i as u8 * 2 + 1),
                         info_v1: None,
                     })
                     .collect();
             } else {
+                // Mono
                 self.tracks = (0..self.channels.len())
                     .map(|i| TrackDescription {
                         channels: Channels::Mono(i as u8),
@@ -250,29 +289,7 @@ impl BrstmInformation {
                     })
                     .collect();
             }
-            made_change = true;
-        } else {
-            self.tracks.retain(|track| {
-                match &track.channels {
-                    Channels::Mono(channel) => {
-                        if *channel >= self.info.num_channels {
-                            made_change = true;
-                            return false;
-                        }
-                    }
-                    Channels::Stereo(left, right) => {
-                        if *left >= self.info.num_channels {
-                            made_change = true;
-                            return false;
-                        }
-                        if *right >= self.info.num_channels {
-                            made_change = true;
-                            return false;
-                        }
-                    }
-                }
-                true
-            });
+            made_change = true
         }
         made_change
     }
