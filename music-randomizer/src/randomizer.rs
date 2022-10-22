@@ -35,6 +35,14 @@ impl PatchTarget {
             PatchTarget::Vanilla(v) => Some(v.name),
         }
     }
+
+    pub fn is_stereo(&self) -> bool {
+        match self {
+            PatchTarget::Custom(c) => c.brstm_info.is_stereo(),
+            // all vanilla songs (we randomize) are stereo
+            PatchTarget::Vanilla(..) => true,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -192,7 +200,13 @@ pub fn execute_patches(
         } else {
             info!("patching {}", patch.vanilla.name);
         }
-        let reshape_def = calc_reshape(patch.custom.get_add_track_type(), patch.vanilla.add_tracks);
+        // all tracks in vanilla (we randomize) are stereo
+        let reshape_def = calc_reshape(
+            patch.custom.get_add_track_type(),
+            patch.custom.is_stereo(),
+            patch.vanilla.add_tracks,
+            true,
+        );
 
         let mut new_song = match patch.custom {
             PatchTarget::Custom(c) => {
@@ -220,7 +234,7 @@ pub fn execute_patches(
             }
         };
         // TODO error handling
-        // println!("{reshape_def:?}");
+        // debug!("{reshape_def:?}");
         match reshape(&mut new_song, &reshape_def) {
             Ok(()) => {
                 let outpath = construct_path(dest_folder, patch.vanilla.name);

@@ -183,17 +183,23 @@ pub fn read_music_dir_rec(
                             debug!("successfully parsed {path:?}");
                             if let Some(additional_track_count) = brstm.tracks.len().checked_sub(1)
                             {
-                                songs.push(
-                                    CustomMusicInfo {
-                                        path,
-                                        // just
-                                        add_tracks: make_normal_additional_tracks(
-                                            additional_track_count,
-                                        ),
-                                        brstm_info: brstm,
-                                    }
-                                    .into(),
-                                );
+                                if brstm.channels_per_track().is_none() {
+                                    error!(
+                                        "File {path:?} has mixed mono/stereo information, skipping"
+                                    );
+                                } else {
+                                    songs.push(
+                                        CustomMusicInfo {
+                                            path,
+                                            // just
+                                            add_tracks: make_normal_additional_tracks(
+                                                additional_track_count,
+                                            ),
+                                            brstm_info: brstm,
+                                        }
+                                        .into(),
+                                    );
+                                }
                             } else {
                                 error!("File {path:?} has 0 tracks, skipping");
                             }

@@ -1,7 +1,6 @@
 use crate::{
     brstm::BrstmInfoWithData,
     structs::{AdpcmChannelInformation, Channels, TrackDescription},
-    ReshapeSrc,
 };
 use thiserror::Error;
 
@@ -9,6 +8,18 @@ use thiserror::Error;
 pub enum AdditionalTrackKind {
     Normal,
     Additive,
+}
+
+#[derive(Debug, Clone)]
+pub enum ReshapeTrackDef {
+    Stereo { left: ReshapeSrc, right: ReshapeSrc },
+    Mono { channel: ReshapeSrc },
+}
+
+#[derive(Debug, Clone)]
+pub enum ReshapeSrc {
+    Channel(u8),
+    Empty,
 }
 
 #[derive(Error, Debug)]
@@ -21,13 +32,42 @@ pub enum ReshapeError {
     ChannelNotExistent,
 }
 
+/// assumes tracks are in a specific layout: Stereo(0,1), Stereo(2,3), etc
+/// or Mono(0), Mono(1)
 pub fn calc_reshape(
     original: &[AdditionalTrackKind],
+    original_is_stereo: bool,
     new: &[AdditionalTrackKind],
-) -> Vec<ReshapeSrc> {
+    new_is_stereo: bool,
+) -> Vec<ReshapeTrackDef> {
+    let get_reshape_src_ref = |track_no: u8| {
+        if new_is_stereo {
+            if original_is_stereo {
+                ReshapeTrackDef::Stereo {
+                    left: ReshapeSrc::Channel(track_no * 2),
+                    right: ReshapeSrc::Channel(track_no * 2 + 1),
+                }
+            } else {
+                ReshapeTrackDef::Stereo {
+                    left: ReshapeSrc::Channel(track_no),
+                    right: ReshapeSrc::Channel(track_no),
+                }
+            }
+        } else {
+            if original_is_stereo {
+                ReshapeTrackDef::Mono {
+                    channel: ReshapeSrc::Channel(track_no * 2),
+                }
+            } else {
+                ReshapeTrackDef::Mono {
+                    channel: ReshapeSrc::Channel(track_no),
+                }
+            }
+        }
+    };
     // main track always stays
     let mut result = Vec::with_capacity(new.len() + 1);
-    result.push(ReshapeSrc::Track(0));
+    result.push(get_reshape_src_ref(0));
     let mut orig_normal_tracks = original.iter().enumerate().filter_map(|(i, typ)| {
         if *typ == AdditionalTrackKind::Normal {
             // need to add one since the additional tracks start at 1
@@ -47,12 +87,23 @@ pub fn calc_reshape(
     for track in new.iter() {
         let reshape_entry = match track {
             AdditionalTrackKind::Normal => {
-                ReshapeSrc::Track(orig_normal_tracks.next().unwrap_or(0))
+                get_reshape_src_ref(orig_normal_tracks.next().unwrap_or(0))
             }
             AdditionalTrackKind::Additive => orig_additive_tracks
                 .next()
-                .map(ReshapeSrc::Track)
-                .unwrap_or(ReshapeSrc::Empty),
+                .map(get_reshape_src_ref)
+                .unwrap_or_else(|| {
+                    if new_is_stereo {
+                        ReshapeTrackDef::Stereo {
+                            left: ReshapeSrc::Empty,
+                            right: ReshapeSrc::Empty,
+                        }
+                    } else {
+                        ReshapeTrackDef::Mono {
+                            channel: ReshapeSrc::Empty,
+                        }
+                    }
+                }),
         };
         result.push(reshape_entry);
     }
@@ -61,66 +112,58 @@ pub fn calc_reshape(
 
 pub fn reshape(
     brstm: &mut BrstmInfoWithData,
-    track_reshape: &[ReshapeSrc],
+    track_reshape: &[ReshapeTrackDef],
 ) -> Result<(), ReshapeError> {
-    if !brstm
-        .info
-        .tracks
-        .iter()
-        .all(|track| track.channels.channels() == 2)
-    {
-        return Err(ReshapeError::NotStereo);
-    }
     // first, figure out how channels need to be reshaped
     let mut channel_reshape = Vec::new();
     let mut cur_channel_idx = 0;
     let mut new_tracks = Vec::new();
     let mut new_channels = Vec::new();
-    for track in track_reshape.iter() {
-        match &track {
-            ReshapeSrc::Track(track_ref) => {
-                let src_track = brstm
+    let get_info_v1 = |reshape_src: &ReshapeSrc| match reshape_src {
+        ReshapeSrc::Channel(channel) => brstm
+            .info
+            .tracks
+            .iter()
+            .find(|track| track.channels.includes_channel(*channel))
+            .and_then(|track| track.info_v1.clone()),
+        _ => None,
+    };
+    let get_new_channel =
+        |reshape_src: &ReshapeSrc| -> Result<AdpcmChannelInformation, ReshapeError> {
+            match reshape_src {
+                ReshapeSrc::Channel(channel) => brstm
                     .info
-                    .tracks
-                    .get(*track_ref as usize)
-                    .ok_or(ReshapeError::TrackNotExistent)?;
-                match &src_track.channels {
-                    Channels::Stereo(left, right) => {
-                        channel_reshape.push(ReshapeSrc::Track(*left));
-                        channel_reshape.push(ReshapeSrc::Track(*right));
-                        new_tracks.push(TrackDescription {
-                            info_v1: src_track.info_v1.clone(),
-                            channels: Channels::Stereo(cur_channel_idx, cur_channel_idx + 1),
-                        });
-                        cur_channel_idx += 2;
-
-                        let left_channel = brstm
-                            .info
-                            .channels
-                            .get(*left as usize)
-                            .ok_or(ReshapeError::ChannelNotExistent)?;
-                        new_channels.push(left_channel.clone());
-                        let right_channel = brstm
-                            .info
-                            .channels
-                            .get(*right as usize)
-                            .ok_or(ReshapeError::ChannelNotExistent)?;
-                        new_channels.push(right_channel.clone());
-                    }
-                    Channels::Mono(_) => unreachable!(),
-                }
+                    .channels
+                    .get(*channel as usize)
+                    .cloned()
+                    .ok_or(ReshapeError::ChannelNotExistent),
+                ReshapeSrc::Empty => Ok(AdpcmChannelInformation::default()),
             }
-            ReshapeSrc::Empty => {
-                channel_reshape.push(ReshapeSrc::Empty);
-                channel_reshape.push(ReshapeSrc::Empty);
+        };
+    for track in track_reshape.iter() {
+        match track {
+            ReshapeTrackDef::Stereo { left, right } => {
+                channel_reshape.push(left.clone());
+                channel_reshape.push(right.clone());
+                // figure out if the old track info belonging to the left channel
+                // had v1 info, if yes include it
                 new_tracks.push(TrackDescription {
-                    info_v1: None,
+                    info_v1: get_info_v1(left),
                     channels: Channels::Stereo(cur_channel_idx, cur_channel_idx + 1),
                 });
                 cur_channel_idx += 2;
+                new_channels.push(get_new_channel(left)?);
+                new_channels.push(get_new_channel(right)?);
+            }
+            ReshapeTrackDef::Mono { channel } => {
+                channel_reshape.push(channel.clone());
 
-                new_channels.push(AdpcmChannelInformation::default());
-                new_channels.push(AdpcmChannelInformation::default());
+                new_tracks.push(TrackDescription {
+                    info_v1: get_info_v1(channel),
+                    channels: Channels::Mono(cur_channel_idx),
+                });
+                cur_channel_idx += 1;
+                new_channels.push(get_new_channel(channel)?);
             }
         }
     }
@@ -147,7 +190,7 @@ pub fn reshape(
                     // seems to be the best way to extend the vec with empty bytes
                     data_bytes.resize(data_bytes.len() + block_size as usize, 0);
                 }
-                ReshapeSrc::Track(channel_ref) => {
+                ReshapeSrc::Channel(channel_ref) => {
                     adpc_bytes.extend_from_slice(brstm.get_adpc_bytes(*channel_ref, block_index));
                     data_bytes.extend_from_slice(brstm.get_data_block(*channel_ref, block_index));
                 }

@@ -1,4 +1,7 @@
-use std::{io::{self, Read, Seek, SeekFrom, Write}, iter::repeat};
+use std::{
+    io::{self, Read, Seek, SeekFrom, Write},
+    iter::repeat,
+};
 
 use binrw::{BinReaderExt, BinResult, BinWriterExt};
 
@@ -226,10 +229,29 @@ impl BrstmInformation {
         self.channels.len() as u8
     }
 
+    /// returns None if it cannot be determined
+    pub fn channels_per_track(&self) -> Option<u8> {
+        let track_channel_count = self.tracks.iter().next()?.channels.channels();
+        for track in self.tracks.iter().skip(1) {
+            if track.channels.channels() != track_channel_count {
+                return None;
+            }
+        }
+        Some(track_channel_count)
+    }
+
+    pub fn is_stereo(&self) -> bool {
+        matches!(self.channels_per_track(), Some(2))
+    }
+
+    pub fn is_mono(&self) -> bool {
+        matches!(self.channels_per_track(), Some(1))
+    }
+
+    /// determine if track information is broken:
+    /// - channels are referenced that don't exist
+    /// - channels exist but aren't referenced
     pub fn check_tracks_valid(&self) -> bool {
-        // determine if track information is broken:
-        // - channels are referenced that don't exist
-        // - channels exist but aren't referenced
         let mut referenced_channels: Vec<_> = repeat(false).take(self.channels.len()).collect();
         // iterate over all tracks, mark each found channel as referenced and return false when a non
         // existing channel is referenced
@@ -241,7 +263,7 @@ impl BrstmInformation {
                     } else {
                         return false;
                     }
-                },
+                }
                 Channels::Stereo(left, right) => {
                     if let Some(referenced) = referenced_channels.get_mut(*left as usize) {
                         *referenced = true;
@@ -253,7 +275,7 @@ impl BrstmInformation {
                     } else {
                         return false;
                     }
-                },
+                }
             }
         }
         // make sure all channels were referenced
@@ -274,7 +296,7 @@ impl BrstmInformation {
             // first, guess if it's stereo or mono
             if self.channels.len() > 1 && self.channels.len() % 2 == 0 {
                 // Stereo
-                self.tracks = (0..self.channels.len()/2)
+                self.tracks = (0..self.channels.len() / 2)
                     .map(|i| TrackDescription {
                         channels: Channels::Stereo(i as u8 * 2, i as u8 * 2 + 1),
                         info_v1: None,

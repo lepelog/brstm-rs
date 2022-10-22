@@ -225,6 +225,13 @@ impl Channels {
             Self::Stereo(_, c) => *c,
         }
     }
+
+    pub fn includes_channel(&self, channel: u8) -> bool {
+        match self {
+            Self::Mono(c) => *c == channel,
+            Self::Stereo(left, right) => *left == channel || *right == channel,
+        }
+    }
 }
 
 #[binrw]
