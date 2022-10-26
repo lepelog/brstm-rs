@@ -64,8 +64,8 @@ trait VecRandChoiceRemove {
     fn choice_swap_remove<R: Rng>(&mut self, rng: &mut R) -> Option<Self::Item>;
 }
 
-impl <T> VecRandChoiceRemove for Vec<T> {
-    type Item=T;
+impl<T> VecRandChoiceRemove for Vec<T> {
+    type Item = T;
 
     fn choice_swap_remove<R: Rng>(&mut self, rng: &mut R) -> Option<Self::Item> {
         if self.is_empty() {
@@ -166,8 +166,7 @@ pub fn randomize<R: Rng>(
     info!("looping: {}", custom_looping_songs.len());
     info!("nonlooping short: {}", custom_short_nonlooping_songs.len());
     info!("nonlooping long: {}", custom_long_nonlooping_songs.len());
-    let mut handle = |vanilla_songs: Vec<VanillaInfo>,
-                      custom_songs: &Vec<Rc<CustomMusicInfo>>| {
+    let mut handle = |vanilla_songs: Vec<VanillaInfo>, custom_songs: &Vec<Rc<CustomMusicInfo>>| {
         // copy the pool, so we can reset it if we run out of tracks
         let mut copied_pool = custom_songs.clone();
         // vanilla songs to mix with the custom music
@@ -175,20 +174,36 @@ pub fn randomize<R: Rng>(
         for vanilla_song in vanilla_songs {
             if custom_songs.is_empty() {
                 // the vanilla pool is always big enough
-                patches.push(PatchEntry { vanilla: vanilla_song, custom: PatchTarget::Vanilla(vanilla_shuffle_pool.choice_swap_remove(rng).unwrap()) });
+                patches.push(PatchEntry {
+                    vanilla: vanilla_song,
+                    custom: PatchTarget::Vanilla(
+                        vanilla_shuffle_pool.choice_swap_remove(rng).unwrap(),
+                    ),
+                });
             } else if let Some(custom_song) = copied_pool.choice_swap_remove(rng) {
                 // found a song in the current pool
-                patches.push(PatchEntry { vanilla: vanilla_song, custom: PatchTarget::Custom(custom_song) });
+                patches.push(PatchEntry {
+                    vanilla: vanilla_song,
+                    custom: PatchTarget::Custom(custom_song),
+                });
             } else {
                 // if we get here, there is at least 1 custom song but the current custom pool is empty
                 if limit_vanilla {
                     // never use vanilla songs, fill the pool again and choose from there
                     copied_pool = custom_songs.clone();
                     let custom_song = copied_pool.choice_swap_remove(rng).unwrap();
-                    patches.push(PatchEntry { vanilla: vanilla_song, custom: PatchTarget::Custom(custom_song) });
+                    patches.push(PatchEntry {
+                        vanilla: vanilla_song,
+                        custom: PatchTarget::Custom(custom_song),
+                    });
                 } else {
                     // if the pool is exhausted and vanilla songs are allowed, use them
-                    patches.push(PatchEntry { vanilla: vanilla_song, custom: PatchTarget::Vanilla(vanilla_shuffle_pool.choice_swap_remove(rng).unwrap()) });
+                    patches.push(PatchEntry {
+                        vanilla: vanilla_song,
+                        custom: PatchTarget::Vanilla(
+                            vanilla_shuffle_pool.choice_swap_remove(rng).unwrap(),
+                        ),
+                    });
                 }
             }
         }

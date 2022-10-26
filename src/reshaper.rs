@@ -54,6 +54,7 @@ pub fn calc_reshape(
                 }
             }
         } else {
+            #[allow(clippy::collapsible_else_if)]
             if original_is_stereo {
                 ReshapeTrackDef::Mono {
                     channel: ReshapeSrc::Channel(track_no * 2),

@@ -3,12 +3,13 @@ use std::{
     collections::HashMap,
     ffi::OsString,
     fs::{self, File},
-    io::{BufRead, BufReader},
+    io::BufRead,
     iter::repeat,
     path::{Path, PathBuf},
     rc::Rc,
 };
 
+use binrw::io::BufReader;
 use brstm::{reshaper::AdditionalTrackKind, BrstmInformation};
 
 use log::{debug, error, info};
@@ -187,8 +188,8 @@ pub fn read_music_dir_rec(
                     read_music_dir_rec(&path, new_depth, songs)?;
                 } else if path_meta.is_file() && path.extension().map_or(false, |e| e == "brstm") {
                     let read_file = || -> binrw::BinResult<_> {
-                        let mut f = File::open(&path)?;
-                        let mut result = BrstmInformation::from_reader(&mut f)?;
+                        let f = File::open(&path)?;
+                        let mut result = BrstmInformation::from_reader(&mut BufReader::new(f))?;
                         result.fix_tracks();
                         Ok(result)
                     };

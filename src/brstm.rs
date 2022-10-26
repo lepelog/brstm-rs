@@ -231,7 +231,7 @@ impl BrstmInformation {
 
     /// returns None if it cannot be determined
     pub fn channels_per_track(&self) -> Option<u8> {
-        let track_channel_count = self.tracks.iter().next()?.channels.channels();
+        let track_channel_count = self.tracks.first()?.channels.channels();
         for track in self.tracks.iter().skip(1) {
             if track.channels.channels() != track_channel_count {
                 return None;
