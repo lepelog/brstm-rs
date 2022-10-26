@@ -6,6 +6,7 @@ use std::{
     io::{BufRead, BufReader},
     iter::repeat,
     path::{Path, PathBuf},
+    rc::Rc,
 };
 
 use brstm::{reshaper::AdditionalTrackKind, BrstmInformation};
@@ -73,9 +74,8 @@ pub struct CustomMusicInfo {
 }
 
 pub struct MusicPack {
-    // TODO: I want to move this around a lot, is a box worth it?
-    pub songs: Vec<Box<CustomMusicInfo>>,
-    pub replacements: HashMap<String, Box<CustomMusicInfo>>,
+    pub songs: Vec<Rc<CustomMusicInfo>>,
+    pub replacements: HashMap<String, Rc<CustomMusicInfo>>,
 }
 
 pub fn read_all_music_packs(dir: &Path) -> binrw::BinResult<Vec<MusicPack>> {
@@ -110,7 +110,11 @@ pub fn read_music_pack(dir: &Path) -> binrw::BinResult<MusicPack> {
     // read the replacement file if it exists
     let mut replacement_file_path = dir.to_owned();
     replacement_file_path.push("replacements.txt");
+
     let mut replacements = HashMap::new();
+    // holds songs that are removed from the list of normally randomized ones,
+    // but they can appear multiple times if that's explicitly requested in replacements.txt
+    let mut already_fixed_placed = Vec::new();
     if let Ok(f) = File::open(&replacement_file_path) {
         // since the file could be opened, *now* report errors during reading
         let reader = BufReader::new(f);
@@ -125,6 +129,7 @@ pub fn read_music_pack(dir: &Path) -> binrw::BinResult<MusicPack> {
                 continue;
             }
             if let Some((vanilla, custom)) = line.split_once(':') {
+                // TODO: support for also randomizing
                 let vanilla = vanilla.trim();
                 let custom = custom.trim();
                 if vanilla.is_empty() || custom.is_empty() {
@@ -134,17 +139,26 @@ pub fn read_music_pack(dir: &Path) -> binrw::BinResult<MusicPack> {
                 // find this custom song in the paths
                 if let Some(pos) = songs
                     .iter()
-                    .position(|s| s.path.file_name().unwrap() == custom_with_ext)
+                    .position(|s| s.path.file_name().map_or(false, |n| n == custom_with_ext))
                 {
                     debug!("successfully found replacement for {vanilla}: {custom}");
-                    replacements.insert(vanilla.to_string(), songs.swap_remove(pos));
-                    // println!("success for {vanilla}, {custom}");
+                    let custom_replacement = songs.swap_remove(pos);
+                    already_fixed_placed.push(Rc::clone(&custom_replacement));
+                    replacements.insert(vanilla.to_string(), custom_replacement);
+                } else if let Some(pos) = already_fixed_placed
+                    .iter()
+                    .position(|s| s.path.file_name().map_or(false, |n| n == custom_with_ext))
+                {
+                    debug!("successfully found replacement for {vanilla}: {custom} (again)");
+                    replacements.insert(vanilla.to_string(), Rc::clone(&already_fixed_placed[pos]));
                 } else {
                     // TODO: communicate a warning *somehow* better if the file is not found
                     error!("replacement file {custom} can't be found!");
                 }
             }
         }
+    } else {
+        error!("could not open {replacement_file_path:?}, skipping");
     }
     Ok(MusicPack {
         songs,
@@ -155,7 +169,7 @@ pub fn read_music_pack(dir: &Path) -> binrw::BinResult<MusicPack> {
 pub fn read_music_dir_rec(
     dir: &Path,
     max_depth: usize,
-    songs: &mut Vec<Box<CustomMusicInfo>>,
+    songs: &mut Vec<Rc<CustomMusicInfo>>,
 ) -> binrw::BinResult<()> {
     let new_depth = if let Some(new_depth) = max_depth.checked_sub(1) {
         new_depth
@@ -188,17 +202,14 @@ pub fn read_music_dir_rec(
                                         "File {path:?} has mixed mono/stereo information, skipping"
                                     );
                                 } else {
-                                    songs.push(
-                                        CustomMusicInfo {
-                                            path,
-                                            // just
-                                            add_tracks: make_normal_additional_tracks(
-                                                additional_track_count,
-                                            ),
-                                            brstm_info: brstm,
-                                        }
-                                        .into(),
-                                    );
+                                    songs.push(Rc::new(CustomMusicInfo {
+                                        path,
+                                        // just
+                                        add_tracks: make_normal_additional_tracks(
+                                            additional_track_count,
+                                        ),
+                                        brstm_info: brstm,
+                                    }));
                                 }
                             } else {
                                 error!("File {path:?} has 0 tracks, skipping");

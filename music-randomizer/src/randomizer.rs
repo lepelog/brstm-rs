@@ -1,8 +1,10 @@
 use log::{debug, error, info, log_enabled, Level};
 use std::{
     collections::{hash_map::Entry, HashMap},
+    ffi::OsStr,
     fs::File,
     path::{Path, PathBuf},
+    rc::Rc,
 };
 
 use brstm::{
@@ -47,7 +49,7 @@ impl PatchTarget {
 
 #[derive(Debug)]
 pub enum PatchTarget {
-    Custom(Box<CustomMusicInfo>),
+    Custom(Rc<CustomMusicInfo>),
     Vanilla(VanillaInfo),
 }
 
@@ -55,6 +57,23 @@ fn construct_path(base: &Path, name: &str) -> PathBuf {
     let mut tmp = base.to_owned();
     tmp.push(name);
     tmp
+}
+
+trait VecRandChoiceRemove {
+    type Item;
+    fn choice_swap_remove<R: Rng>(&mut self, rng: &mut R) -> Option<Self::Item>;
+}
+
+impl <T> VecRandChoiceRemove for Vec<T> {
+    type Item=T;
+
+    fn choice_swap_remove<R: Rng>(&mut self, rng: &mut R) -> Option<Self::Item> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self.swap_remove(rng.gen_range(0..self.len())))
+        }
+    }
 }
 
 pub fn randomize<R: Rng>(
@@ -75,13 +94,14 @@ pub fn randomize<R: Rng>(
         }
     } else {
         // first, add the requested replacements
-        let mut replacements: HashMap<String, Box<CustomMusicInfo>> = HashMap::new();
+        let mut replacements: HashMap<String, Rc<CustomMusicInfo>> = HashMap::new();
         // earlier packs have higher priority
         for pack in music_packs.into_iter() {
             randomized_pool.extend(pack.songs);
             for (vanilla_name, replacement) in pack.replacements {
                 match replacements.entry(vanilla_name) {
-                    Entry::Occupied(_) => {
+                    Entry::Occupied(entry) => {
+                        debug!("Vanilla song {} can't be replaced with {:?}, already replaced with {:?}", entry.key(), replacement.path.file_name().and_then(OsStr::to_str).unwrap_or(""), entry.get().path.file_name().and_then(OsStr::to_str).unwrap_or(""));
                         // if it's already occupied, it will be randomized
                         randomized_pool.push(replacement);
                     }
@@ -114,7 +134,6 @@ pub fn randomize<R: Rng>(
     );
     info!("{} songs already fixed placed", patches.len());
     randomized_pool.sort_unstable_by(|a, b| a.path.cmp(&b.path));
-    randomized_pool.shuffle(rng);
     vanilla_songs.shuffle(rng);
     // place different types individually
     let mut vanilla_looping_songs = Vec::new();
@@ -148,42 +167,38 @@ pub fn randomize<R: Rng>(
     info!("nonlooping short: {}", custom_short_nonlooping_songs.len());
     info!("nonlooping long: {}", custom_long_nonlooping_songs.len());
     let mut handle = |vanilla_songs: Vec<VanillaInfo>,
-                      mut custom_songs: Vec<Box<CustomMusicInfo>>| {
-        if limit_vanilla {
-            let sample_count = vanilla_songs.len().saturating_sub(custom_songs.len());
-            custom_songs.extend(
-                custom_songs
-                    .choose_multiple(rng, sample_count)
-                    .cloned()
-                    .collect::<Vec<_>>(),
-            );
+                      custom_songs: &Vec<Rc<CustomMusicInfo>>| {
+        // copy the pool, so we can reset it if we run out of tracks
+        let mut copied_pool = custom_songs.clone();
+        // vanilla songs to mix with the custom music
+        let mut vanilla_shuffle_pool = vanilla_songs.clone();
+        for vanilla_song in vanilla_songs {
+            if custom_songs.is_empty() {
+                // the vanilla pool is always big enough
+                patches.push(PatchEntry { vanilla: vanilla_song, custom: PatchTarget::Vanilla(vanilla_shuffle_pool.choice_swap_remove(rng).unwrap()) });
+            } else if let Some(custom_song) = copied_pool.choice_swap_remove(rng) {
+                // found a song in the current pool
+                patches.push(PatchEntry { vanilla: vanilla_song, custom: PatchTarget::Custom(custom_song) });
+            } else {
+                // if we get here, there is at least 1 custom song but the current custom pool is empty
+                if limit_vanilla {
+                    // never use vanilla songs, fill the pool again and choose from there
+                    copied_pool = custom_songs.clone();
+                    let custom_song = copied_pool.choice_swap_remove(rng).unwrap();
+                    patches.push(PatchEntry { vanilla: vanilla_song, custom: PatchTarget::Custom(custom_song) });
+                } else {
+                    // if the pool is exhausted and vanilla songs are allowed, use them
+                    patches.push(PatchEntry { vanilla: vanilla_song, custom: PatchTarget::Vanilla(vanilla_shuffle_pool.choice_swap_remove(rng).unwrap()) });
+                }
+            }
         }
-        let vanilla_fill_necessary = vanilla_songs.len().saturating_sub(custom_songs.len());
-        patches.extend(
-            vanilla_songs
-                .iter()
-                .zip(
-                    // try to use all custom songs
-                    custom_songs.into_iter().map(PatchTarget::Custom).chain(
-                        // but if that's not enough get vanilla songs, choosing randomly
-                        vanilla_songs
-                            .choose_multiple(rng, vanilla_fill_necessary)
-                            .cloned()
-                            .map(PatchTarget::Vanilla),
-                    ),
-                )
-                .map(|(vanilla, custom)| PatchEntry {
-                    vanilla: vanilla.clone(),
-                    custom,
-                }),
-        );
     };
-    handle(vanilla_looping_songs, custom_looping_songs);
+    handle(vanilla_looping_songs, &custom_looping_songs);
     handle(
         vanilla_short_nonlooping_songs,
-        custom_short_nonlooping_songs,
+        &custom_short_nonlooping_songs,
     );
-    handle(vanilla_long_nonlooping_songs, custom_long_nonlooping_songs);
+    handle(vanilla_long_nonlooping_songs, &custom_long_nonlooping_songs);
     patches
 }
 
@@ -220,7 +235,9 @@ pub fn execute_patches(
                     }
                     Ok(f) => f,
                 };
-                match c.brstm_info.into_with_data(&mut f) {
+                // TODO: use unwrap_or_clone once that gets stabilized
+                let custom_info = Rc::try_unwrap(c).unwrap_or_else(|rc| (*rc).clone());
+                match custom_info.brstm_info.into_with_data(&mut f) {
                     Err(e) => {
                         error!("Error reading song from {}, skipping: {e:?}", &new_name);
                         continue;
