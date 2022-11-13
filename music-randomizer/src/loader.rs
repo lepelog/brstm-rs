@@ -60,7 +60,9 @@ impl SongCategory {
     pub fn categorize(brstm: &BrstmInformation) -> Self {
         if brstm.info.loop_flag == 1 {
             Self::Looping
-        } else if brstm.info.total_samples < brstm.info.sample_rate as u32 * NONLOOPNING_SHORT_CUTOFF_SECONDS {
+        } else if brstm.info.total_samples
+            < brstm.info.sample_rate as u32 * NONLOOPNING_SHORT_CUTOFF_SECONDS
+        {
             Self::ShortNonLooping
         } else {
             Self::NonLooping
