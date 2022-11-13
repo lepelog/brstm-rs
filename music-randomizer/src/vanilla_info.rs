@@ -279,7 +279,7 @@ pub fn load() -> Vec<VanillaInfo> {
             SongCategory::NonLooping
         };
         songs.push(VanillaInfo {
-            name: *name,
+            name,
             category,
             add_tracks: additional_tracks_from_type_num(*typ as usize),
         })

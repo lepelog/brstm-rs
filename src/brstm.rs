@@ -152,7 +152,7 @@ impl BrstmInformation {
         ws.write_be(&head1)?;
 
         let mut track_info_offsets = Vec::with_capacity(self.tracks.len());
-        let track_info_type = if any_has_v1 { 1 } else { 0 };
+        let track_info_type = any_has_v1.into();
         let default_v1 = || {
             if any_has_v1 {
                 Some(TrackDescriptionV1 {
