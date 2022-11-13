@@ -14,6 +14,8 @@ use brstm::{reshaper::AdditionalTrackKind, BrstmInformation};
 
 use log::{debug, error, info};
 
+use crate::NONLOOPNING_SHORT_CUTOFF_SECONDS;
+
 ///
 /// 1 stage
 /// 2 cs loop
@@ -58,8 +60,7 @@ impl SongCategory {
     pub fn categorize(brstm: &BrstmInformation) -> Self {
         if brstm.info.loop_flag == 1 {
             Self::Looping
-        } else if brstm.info.total_samples < 99300 {
-            // 99300 samples is the arbitrary treshhold
+        } else if brstm.info.total_samples < brstm.info.sample_rate as u32 * NONLOOPNING_SHORT_CUTOFF_SECONDS {
             Self::ShortNonLooping
         } else {
             Self::NonLooping

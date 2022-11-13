@@ -14,6 +14,9 @@ mod loader;
 mod randomizer;
 mod vanilla_info;
 
+// arbitrarily chosen number of seconds where short ends and normal starts
+const NONLOOPNING_SHORT_CUTOFF_SECONDS: u32 = 11;
+
 #[derive(Parser)]
 #[command(version)]
 /// Music randomizer for Skyward Sword

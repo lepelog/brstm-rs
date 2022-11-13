@@ -1,6 +1,6 @@
 use brstm::reshaper::AdditionalTrackKind;
 
-use crate::loader::SongCategory;
+use crate::{loader::SongCategory, NONLOOPNING_SHORT_CUTOFF_SECONDS};
 
 const VANILLA_INFO: &[(&str, bool, u32, u32)] = &[
     ("10BAB99AF131BF0979699BFEFCC44EA8", false, 32, 11),
@@ -273,7 +273,7 @@ pub fn load() -> Vec<VanillaInfo> {
         }
         let category = if *looping {
             SongCategory::Looping
-        } else if *samples < 99300 {
+        } else if *samples < 32000 * NONLOOPNING_SHORT_CUTOFF_SECONDS {
             SongCategory::ShortNonLooping
         } else {
             SongCategory::NonLooping
