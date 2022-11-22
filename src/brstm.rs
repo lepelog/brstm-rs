@@ -70,12 +70,6 @@ impl BrstmInformation {
 
             tracks.push(track);
         }
-        let mut adpcm_section = vec![0; header.adpc_size as usize - 8];
-        f.seek(SeekFrom::Start((header.adpc_offset + 8).into()))?;
-        f.read_exact(&mut adpcm_section)?;
-        let mut data_section = vec![0; header.data_size as usize - 0x20];
-        f.seek(SeekFrom::Start((header.data_offset + 0x20).into()))?;
-        f.read_exact(&mut data_section)?;
         Ok(BrstmInformation {
             info: head1,
             tracks,
