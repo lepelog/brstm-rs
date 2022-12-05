@@ -119,7 +119,9 @@ pub fn read_music_pack(dir: &Path) -> binrw::BinResult<MusicPack> {
     // holds songs that are removed from the list of normally randomized ones,
     // but they can appear multiple times if that's explicitly requested in replacements.txt
     let mut already_fixed_placed = Vec::new();
-    if let Ok(f) = File::open(&replacement_file_path) {
+    if !replacement_file_path.is_file() {
+        debug!("{replacement_file_path:?} is not a file (probably doesn't exist), skipping");
+    } else if let Ok(f) = File::open(&replacement_file_path) {
         // since the file could be opened, *now* report errors during reading
         let reader = BufReader::new(f);
         for line in reader.lines() {
