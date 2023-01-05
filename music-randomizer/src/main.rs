@@ -8,10 +8,11 @@ use std::{path::PathBuf, process::exit};
 use loader::read_all_music_packs;
 use randomizer::execute_patches;
 
-use crate::randomizer::randomize;
+use crate::{randomizer::randomize, spoiler_log::write_spoiler_log};
 
 mod loader;
 mod randomizer;
+mod spoiler_log;
 mod vanilla_info;
 
 // arbitrarily chosen number of seconds where short ends and normal starts
@@ -63,7 +64,7 @@ fn main() {
         exit(1);
     }
     let dest_dir = {
-        let mut tmp = base_path;
+        let mut tmp = base_path.clone();
         tmp.push("modified-extract");
         tmp.push("DATA");
         tmp.push("files");
@@ -78,7 +79,7 @@ fn main() {
 
     let seed = args.seed.unwrap_or_else(random);
     info!("using seed {seed}");
-    let mut rng = Pcg64::seed_from_u64(args.seed.unwrap_or_else(random));
+    let mut rng = Pcg64::seed_from_u64(seed);
 
     let music_packs = read_all_music_packs(&custom_dir).unwrap();
     let vanilla_songs = vanilla_info::load();
@@ -90,5 +91,9 @@ fn main() {
         args.random,
         args.limit_vanilla,
     );
+    match write_spoiler_log(&base_path.join("logs/music-rando.log"), seed, &patches) {
+        Ok(_) => (),
+        Err(e) => error!("Error writing spoiler log: {e:?}"),
+    };
     execute_patches(patches, &vanilla_dir, &dest_dir).unwrap();
 }
