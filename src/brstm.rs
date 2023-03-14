@@ -21,10 +21,10 @@ pub struct BrstmInformation {
     pub tracks: Vec<TrackDescription>,
     pub channels: Vec<AdpcmChannelInformation>,
     // does not include the header
-    adpcm_offset: u32,
-    adpcm_size: u32,
-    data_offset: u32,
-    data_size: u32,
+    pub(crate) adpcm_offset: u32,
+    pub(crate) adpcm_size: u32,
+    pub(crate) data_offset: u32,
+    pub(crate) data_size: u32,
 }
 
 impl BrstmInformation {
