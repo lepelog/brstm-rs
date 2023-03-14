@@ -13,4 +13,4 @@ binrw = "0.11.1"
 thiserror = "1.0.39"
 
 [workspace]
-members = ["music-randomizer"]
+members = ["music-randomizer", "brstm-encoder"]
