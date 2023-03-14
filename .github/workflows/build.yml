@@ -45,7 +45,7 @@ jobs:
     # needs: test
     runs-on: ${{ matrix.OS }}
     env:
-      NAME: music-randomizer # change with the name of your project
+      # NAME: music-randomizer # change with the name of your project
       TARGET: ${{ matrix.TARGET }}
       OS: ${{ matrix.OS }}
     steps:
@@ -63,6 +63,8 @@ jobs:
         run: rustup target add $TARGET
       - name: Run build
         run: cd music-randomizer && cargo build --release --verbose --target $TARGET
+      - name: Run build
+        run: cd brstm-encoder && cargo build --release --verbose --target $TARGET
       - name: List target
         run: find ./target
       - name: Compress
@@ -70,16 +72,17 @@ jobs:
           mkdir -p ./artifacts
           # windows is the only OS using a different convention for executable file name
           if [[ $OS =~ ^windows.*$ ]]; then
-              EXEC=$NAME.exe
+              EXEC_SUFFIX=.exe
           else
-              EXEC=$NAME
+              EXEC_SUFFIX=
           fi
           if [[ $GITHUB_REF_TYPE =~ ^tag$ ]]; then
             TAG=$GITHUB_REF_NAME
           else
             TAG=$GITHUB_SHA
           fi
-          mv ./target/$TARGET/release/$EXEC ./artifacts
+          mv ./target/$TARGET/release/music-randomizer$EXEC_SUFFIX ./artifacts
+          mv ./target/$TARGET/release/brstm-encoder$EXEC_SUFFIX ./artifacts
       - name: Archive artifact
         uses: actions/upload-artifact@v3
         with:
