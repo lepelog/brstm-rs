@@ -103,6 +103,8 @@ impl<'a> BrstmStreamEncoder<'a> {
                 if loop_point < 8 {
                     self.samples_until_loop_point = None;
                     self.loop_predictor = block[0]
+                } else {
+                    self.samples_until_loop_point = Some(loop_point - 8);
                 }
             }
 
@@ -247,7 +249,7 @@ pub fn encode_brstm(
             final_block_samples: final_block_samples.try_into().unwrap(),
             final_block_size: final_block_size.try_into().unwrap(),
             final_block_size_padded: ((final_block_size + 31) & !31).try_into().unwrap(),
-            total_blocks: sample_count as u32 / 14336,
+            total_blocks: div_ceil(sample_count, 14336) as u32,
             // filled in later
             audio_offset: 0,
         },
