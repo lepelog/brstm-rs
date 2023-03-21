@@ -1,7 +1,7 @@
 // translated from https://github.com/jackoalan/gc-dspadpcm-encode/blob/039712baa1291fbd77a1390e0496757122efd81b/grok.c
 
 pub const PACKET_SAMPLES: usize = 14;
-pub const PACKET_BYTES: usize = 14;
+pub const PACKET_BYTES: usize = 8;
 
 // need to start the buffer 2 bytes earlier to not
 // read OoB

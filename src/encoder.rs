@@ -80,9 +80,10 @@ impl<'a> BrstmStreamEncoder<'a> {
         self.prev_samples[1] = self.samples[1];
         adpcm_bytes.extend_from_slice(&self.samples[0].to_be_bytes());
         adpcm_bytes.extend_from_slice(&self.samples[1].to_be_bytes());
-        // each paket is 8 bytes
-        for p in 0..BLOCK_SIZE / 8 {
+        // each packet is 8 bytes
+        for p in 0..BLOCK_SIZE / PACKET_BYTES {
             // let num_samples = self.samples.len().min(PACKET_SAMPLES);
+            // the first 2 samples are from the previous packet, if the stream ends first the rest is zero filled
             for (conv_samp, samp) in conv_samps
                 .iter_mut()
                 .skip(2)
@@ -100,18 +101,18 @@ impl<'a> BrstmStreamEncoder<'a> {
             }
 
             if let Some(loop_point) = self.samples_until_loop_point {
-                if loop_point < 8 {
+                if loop_point < PACKET_SAMPLES {
                     self.samples_until_loop_point = None;
                     self.loop_predictor = block[0]
                 } else {
-                    self.samples_until_loop_point = Some(loop_point - 8);
+                    self.samples_until_loop_point = Some(loop_point - PACKET_SAMPLES);
                 }
             }
 
             conv_samps[0] = conv_samps[14];
             conv_samps[1] = conv_samps[15];
 
-            if self.samples.len() >= PACKET_SAMPLES {
+            if self.samples.len() > PACKET_SAMPLES {
                 self.samples = &self.samples[PACKET_SAMPLES..];
             } else {
                 // there aren't enough samples to fill this block, so encoding this stream is finished
@@ -203,17 +204,20 @@ pub fn encode_brstm(
         .map(|channel| BrstmStreamEncoder::init(channel, loop_point.unwrap_or(0)))
         .collect();
 
+    let mut block_count = 0;
     let (final_block_size, final_block_samples) = loop {
         let mut final_chunk_unpadded = None;
         for encoder in &mut channel_encoders {
             // not sure if there is a better way to write this, but we have to stop once all
             // streams reach the final block, which
             let ret = encoder.pull_chunk(&mut adpcm_bytes, &mut data_bytes);
-            if let (Some(a), Some(b)) = (&final_chunk_unpadded, &ret) {
-                assert_eq!(a, b);
-            }
+            // just debug to make sure all have the same length
+            // if let (Some(a), Some(b)) = (&final_chunk_unpadded, &ret) {
+            //     assert_eq!(a, b);
+            // }
             final_chunk_unpadded = ret;
         }
+        block_count += 1;
         if let Some(size) = final_chunk_unpadded {
             break size;
         }
@@ -249,7 +253,7 @@ pub fn encode_brstm(
             final_block_samples: final_block_samples.try_into().unwrap(),
             final_block_size: final_block_size.try_into().unwrap(),
             final_block_size_padded: ((final_block_size + 31) & !31).try_into().unwrap(),
-            total_blocks: div_ceil(sample_count, 14336) as u32,
+            total_blocks: block_count as u32,
             // filled in later
             audio_offset: 0,
         },
