@@ -1,6 +1,6 @@
 [package]
 name = "brstm"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 description = "Crate to read and write brstm files"
 license = "MIT"
