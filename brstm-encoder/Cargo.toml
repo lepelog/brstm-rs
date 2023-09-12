@@ -9,4 +9,4 @@ edition = "2021"
 anyhow = "1.0.75"
 binrw = "0.11.2"
 brstm = { path = ".." }
-clap = { version = "4.4.2", features = ["derive", "cargo"] }
+clap = { version = "4.4.3", features = ["derive", "cargo"] }
