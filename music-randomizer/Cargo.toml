@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 brstm = { path = ".." }
-binrw = "0.11.2"
+binrw = "0.12.0"
 thiserror = "1.0.48"
 clap = { version = "4.4.4", features = ["derive", "cargo"] }
 rand = "0.8.5"
