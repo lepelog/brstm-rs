@@ -7,6 +7,6 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.75"
-binrw = "0.12.0"
+binrw = "0.13.0"
 brstm = { path = ".." }
 clap = { version = "4.4.7", features = ["derive", "cargo"] }
