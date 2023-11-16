@@ -52,8 +52,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install dependencies ubuntu
         run: |
-          apt update
-          apt install -y --no-install-recommends pkg-config ffmpeg-dev
+          sudo apt update
+          sudo apt install -y --no-install-recommends pkg-config ffmpeg-dev
         if: matrix.OS == 'ubuntu-latest'
       - name: Install dependencies mac
         run: |
@@ -70,6 +70,7 @@ jobs:
           Add-Content $env:GITHUB_ENV "FFMPEG_DIR=${pwd}\ffmpeg`n"
           Add-Content $env:GITHUB_PATH "${pwd}\ffmpeg\bin`n"
         if: matrix.OS == 'windows-latest'
+        shell: powershell
       - name: Cargo cache
         uses: actions/cache@v3
         with:
