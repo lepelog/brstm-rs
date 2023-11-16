@@ -10,4 +10,4 @@ anyhow = "1.0.75"
 binrw = "0.13.1"
 brstm = { path = ".." }
 clap = { version = "4.4.8", features = ["derive", "cargo"] }
-ffmpeg-next = "6.0.0"
+ffmpeg-next = { git = "https://github.com/encounter/rust-ffmpeg-zmwangx.git", ref = "f6ff7f8309866e7b92ec2e1580d918274dfcd534" }

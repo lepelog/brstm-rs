@@ -1,13 +1,10 @@
 use std::{fs::File, io::BufWriter};
 
 use anyhow::{bail, Context};
-use binrw::io::BufReader;
 use brstm::encoder::encode_brstm;
 use clap::Parser;
-// use wav::read_channels_from_wav;
 
 mod ffmpeg;
-// mod wav;
 
 #[derive(Parser)]
 #[command(version)]
