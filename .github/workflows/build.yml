@@ -53,7 +53,7 @@ jobs:
       - name: Install dependencies ubuntu
         run: |
           sudo apt update
-          sudo apt install -y --no-install-recommends pkg-config ffmpeg-dev
+          sudo apt install -y --no-install-recommends pkg-config ffmpeg
         if: matrix.OS == 'ubuntu-latest'
       - name: Install dependencies mac
         run: |
