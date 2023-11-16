@@ -1,23 +1,28 @@
 use std::{fs::File, io::BufWriter};
 
 use anyhow::{bail, Context};
+use binrw::io::BufReader;
 use brstm::encoder::encode_brstm;
 use clap::Parser;
-use wav::read_channels_from_wav;
+// use wav::read_channels_from_wav;
 
-mod wav;
+mod ffmpeg;
+// mod wav;
 
 #[derive(Parser)]
 #[command(version)]
 /// Encodes WAV files to BRSTM
 pub struct Args {
     /// Path to the wav file to encode
-    wav_path: String,
+    input_path: String,
     /// Path to the output brstm file, default <filename>.brstm
     brstm_path: Option<String>,
     #[arg(short = 'l', long)]
     /// If set, specifies the loop point
     r#loop: Option<u32>,
+    #[arg(short = 'e', long)]
+    /// If set, specifies the end point
+    end: Option<u32>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -27,29 +32,35 @@ fn main() -> anyhow::Result<()> {
     } else {
         format!(
             "{}.brstm",
-            args.wav_path
-                .strip_suffix(".wav")
-                .context("The input file needs to have a 'wav' file extension!")?
+            args.input_path
+                .rsplit_once(".")
+                .context("The input file needs to have a file extension!")?.0
         )
     };
-    let wav_data = read_channels_from_wav(&args.wav_path).context("error reading wav file")?;
-    if wav_data.channels.len() == 0 {
-        bail!("no channels in wav");
+    let (mut channels, sampling_rate) = ffmpeg::decode_channels(&args.input_path).unwrap();
+    if channels.len() == 0 {
+        bail!("no channels");
     }
-    let sample_count = wav_data.channels[0].len();
+
+    if let Some(end) = args.end {
+        for channel in channels.iter_mut() {
+            channel.truncate(end as usize);
+        }
+    }
+    let sample_count = channels[0].len();
     if let Some(loop_point) = args.r#loop {
         println!(
             "encoding {} to {}, samples: {}, loop: {}",
-            args.wav_path, brstm_path, sample_count, loop_point
+            args.input_path, brstm_path, sample_count, loop_point
         );
     } else {
         println!(
             "encoding {} to {}, samples: {}, no loop",
-            args.wav_path, brstm_path, sample_count
+            args.input_path, brstm_path, sample_count
         );
     }
-    let out_brstm = encode_brstm(&wav_data.channels, wav_data.sample_rate, args.r#loop)
-        .context("error encoding brstm")?;
+    let out_brstm =
+        encode_brstm(&channels, sampling_rate, args.r#loop).context("error encoding brstm")?;
     let mut out_file =
         BufWriter::new(File::create(&brstm_path).context("error creating out file")?);
     out_brstm
