@@ -50,6 +50,26 @@ jobs:
       OS: ${{ matrix.OS }}
     steps:
       - uses: actions/checkout@v4
+      - name: Install dependencies ubuntu
+        run: |
+          apt update
+          apt install -y --no-install-recommends pkg-config ffmpeg-dev
+        if: matrix.OS == 'ubuntu-latest'
+      - name: Install dependencies mac
+        run: |
+          brew install ffmpeg pkg-config
+        if: matrix.OS == 'macos-latest'
+      - name: Install dependencies
+        run: |
+          $VCINSTALLDIR = $(& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath)
+          Add-Content $env:GITHUB_ENV "LIBCLANG_PATH=${VCINSTALLDIR}\VC\Tools\LLVM\x64\bin`n"
+          Invoke-WebRequest "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full-shared.7z" -OutFile ffmpeg-release-full-shared.7z
+          7z x ffmpeg-release-full-shared.7z
+          mkdir ffmpeg
+          mv ffmpeg-*/* ffmpeg/
+          Add-Content $env:GITHUB_ENV "FFMPEG_DIR=${pwd}\ffmpeg`n"
+          Add-Content $env:GITHUB_PATH "${pwd}\ffmpeg\bin`n"
+        if: matrix.OS == 'windows-latest'
       - name: Cargo cache
         uses: actions/cache@v3
         with:
