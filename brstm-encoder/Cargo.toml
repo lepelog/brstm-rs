@@ -9,5 +9,5 @@ edition = "2021"
 anyhow = "1.0.75"
 binrw = "0.13.1"
 brstm = { path = ".." }
-clap = { version = "4.4.8", features = ["derive", "cargo"] }
+clap = { version = "4.4.11", features = ["derive", "cargo"] }
 ffmpeg-next = { version = "6.1.0" }
