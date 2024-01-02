@@ -10,7 +10,7 @@ repository = "https://github.com/lepelog/brstm-rs"
 
 [dependencies]
 binrw = "0.13.3"
-thiserror = "1.0.55"
+thiserror = "1.0.56"
 
 [workspace]
 members = ["music-randomizer", "brstm-encoder"]
