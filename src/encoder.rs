@@ -75,11 +75,11 @@ impl<'a> BrstmStreamEncoder<'a> {
         let mut conv_samps = [0i16; 16];
         conv_samps[0] = self.prev_samples[0];
         conv_samps[1] = self.prev_samples[1];
-
-        self.prev_samples[0] = self.samples[0];
-        self.prev_samples[1] = self.samples[1];
-        adpcm_bytes.extend_from_slice(&self.samples[0].to_be_bytes());
-        adpcm_bytes.extend_from_slice(&self.samples[1].to_be_bytes());
+        
+        adpcm_bytes.extend_from_slice(&self.prev_samples[0].to_be_bytes());
+        adpcm_bytes.extend_from_slice(&self.prev_samples[1].to_be_bytes());
+        self.prev_samples[0] = self.samples.get(BLOCK_SIZE / PACKET_BYTES * PACKET_SAMPLES - 2).copied().unwrap_or(0);
+        self.prev_samples[1] = self.samples.get(BLOCK_SIZE / PACKET_BYTES * PACKET_SAMPLES - 1).copied().unwrap_or(0);
         // each packet is 8 bytes
         for p in 0..BLOCK_SIZE / PACKET_BYTES {
             // let num_samples = self.samples.len().min(PACKET_SAMPLES);
