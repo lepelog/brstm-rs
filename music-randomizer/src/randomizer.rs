@@ -76,6 +76,39 @@ impl<T> VecRandChoiceRemove for Vec<T> {
     }
 }
 
+pub fn only_set_fixed(vanilla_songs: Vec<VanillaInfo>, music_packs: Vec<MusicPack>) -> Vec<PatchEntry> {
+    let mut replacements: HashMap<String, Rc<CustomMusicInfo>> = HashMap::new();
+    for pack in music_packs.into_iter() {
+        for (vanilla_name, replacement) in pack.replacements {
+            match replacements.entry(vanilla_name) {
+                Entry::Occupied(entry) => {
+                    debug!("Vanilla song {} can't be replaced with {:?}, already replaced with {:?}", entry.key(), replacement.path.file_name().and_then(OsStr::to_str).unwrap_or(""), entry.get().path.file_name().and_then(OsStr::to_str).unwrap_or(""));
+                    // if it's already occupied, ignore it
+                }
+                Entry::Vacant(vac) => {
+                    vac.insert(replacement);
+                }
+            }
+        }
+    }
+    vanilla_songs.into_iter().map(|vanilla_song| {
+        match replacements.remove(vanilla_song.name) {
+            Some(custom_song) => {
+                PatchEntry {
+                    vanilla: vanilla_song,
+                    custom: PatchTarget::Custom(custom_song)
+                }
+            },
+            None => {
+                PatchEntry {
+                    vanilla: vanilla_song.clone(),
+                    custom: PatchTarget::Vanilla(vanilla_song)
+                }
+            }
+        }
+    }).collect()
+}
+
 pub fn randomize<R: Rng>(
     rng: &mut R,
     mut vanilla_songs: Vec<VanillaInfo>,
