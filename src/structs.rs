@@ -45,7 +45,7 @@ impl BrstmHeader {
 pub struct HeadChunkOffsets {
     #[br(temp)]
     #[bw(calc = 0x0100_0000)]
-    marker: u32,
+    _marker: u32,
     pub head_chunk_offset: u32,
 }
 
@@ -124,7 +124,7 @@ impl Head2 {
 pub struct TrackInfoOffset {
     #[br(temp)]
     #[bw(calc = 1)]
-    marker: u8,
+    _marker: u8,
     pub track_info_type: u8,
     #[brw(pad_before = 2)]
     pub offset: u32,
@@ -258,7 +258,7 @@ impl Head3 {
 pub struct ChannelInfoOffset {
     #[br(temp)]
     #[bw(calc = 0x0100_0000)]
-    marker: u32,
+    _marker: u32,
     pub offset: u32,
 }
 
@@ -274,7 +274,7 @@ impl ChannelInfoOffset {
 pub struct AdpcmChannelInformation {
     #[br(temp)]
     #[bw(calc = 0x0100_0000)]
-    marker: u32,
+    _marker: u32,
     // points to the data directly after this field
     pub channel_adpcm_coefficients_offset: u32,
     pub adpcm_coefficients: [i16; 16],
