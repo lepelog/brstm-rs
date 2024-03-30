@@ -31,7 +31,7 @@ pub struct Args {
     #[arg(short, long)]
     /// Ignore specific replacements and shuffle all
     random: bool,
-    #[arg(short = 'm', long)]
+    #[arg(short = 'm', long, default_value="normal")]
     /// How to deal with vanilla songs
     /// normal: Have vanilla songs in the pool, they are chosen after all other songs
     /// limit: Repeat already chosen custom songs instead of using vanilla songs
