@@ -95,7 +95,7 @@ fn main() {
     let vanilla_songs = vanilla_info::load();
 
     let patches = if args.vanilla_mode == VanillaMode::ReplacementsOnly {
-        only_set_fixed(vanilla_songs, music_packs)
+        only_set_fixed(&mut rng, vanilla_songs, music_packs)
     } else { randomize(
         &mut rng,
         vanilla_songs,

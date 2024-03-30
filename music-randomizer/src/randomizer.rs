@@ -1,7 +1,6 @@
 use log::{debug, error, info, log_enabled, Level};
 use std::{
-    collections::{hash_map::Entry, HashMap},
-    ffi::OsStr,
+    collections::HashMap,
     fs::File,
     path::{Path, PathBuf},
     rc::Rc,
@@ -76,27 +75,20 @@ impl<T> VecRandChoiceRemove for Vec<T> {
     }
 }
 
-pub fn only_set_fixed(vanilla_songs: Vec<VanillaInfo>, music_packs: Vec<MusicPack>) -> Vec<PatchEntry> {
-    let mut replacements: HashMap<String, Rc<CustomMusicInfo>> = HashMap::new();
+pub fn only_set_fixed<R: Rng>(rng: &mut R, vanilla_songs: Vec<VanillaInfo>, music_packs: Vec<MusicPack>) -> Vec<PatchEntry> {
+    let mut replacements: HashMap<String, Vec<Rc<CustomMusicInfo>>> = HashMap::new();
     for pack in music_packs.into_iter() {
         for (vanilla_name, replacement) in pack.replacements {
-            match replacements.entry(vanilla_name) {
-                Entry::Occupied(entry) => {
-                    debug!("Vanilla song {} can't be replaced with {:?}, already replaced with {:?}", entry.key(), replacement.path.file_name().and_then(OsStr::to_str).unwrap_or(""), entry.get().path.file_name().and_then(OsStr::to_str).unwrap_or(""));
-                    // if it's already occupied, ignore it
-                }
-                Entry::Vacant(vac) => {
-                    vac.insert(replacement);
-                }
-            }
+            replacements.entry(vanilla_name).or_default().push(replacement);
         }
     }
     vanilla_songs.into_iter().map(|vanilla_song| {
-        match replacements.remove(vanilla_song.name) {
-            Some(custom_song) => {
+        match replacements.get(vanilla_song.name) {
+            Some(custom_songs) => {
+                let custom_song = custom_songs.choose(rng).unwrap();
                 PatchEntry {
                     vanilla: vanilla_song,
-                    custom: PatchTarget::Custom(custom_song)
+                    custom: PatchTarget::Custom(Rc::clone(custom_song))
                 }
             },
             None => {
@@ -127,38 +119,33 @@ pub fn randomize<R: Rng>(
         }
     } else {
         // first, add the requested replacements
-        let mut replacements: HashMap<String, Rc<CustomMusicInfo>> = HashMap::new();
-        // earlier packs have higher priority
+        // if multiple packs replace the same song, choose one randomly and
+        // just randomize the other ones
+        let mut all_replacements: HashMap<String, Vec<Rc<CustomMusicInfo>>> = HashMap::new();
         for pack in music_packs.into_iter() {
             randomized_pool.extend(pack.songs);
             for (vanilla_name, replacement) in pack.replacements {
-                match replacements.entry(vanilla_name) {
-                    Entry::Occupied(entry) => {
-                        debug!("Vanilla song {} can't be replaced with {:?}, already replaced with {:?}", entry.key(), replacement.path.file_name().and_then(OsStr::to_str).unwrap_or(""), entry.get().path.file_name().and_then(OsStr::to_str).unwrap_or(""));
-                        // if it's already occupied, it will be randomized
-                        randomized_pool.push(replacement);
-                    }
-                    Entry::Vacant(vac) => {
-                        vac.insert(replacement);
-                    }
-                }
+                all_replacements.entry(vanilla_name).or_default().push(replacement);
             }
         }
-        // we can iterate on this map since we sort the randomized_pool afterwards
-        for (vanilla_name, custom) in replacements {
-            // find the file in the pack
-            // hopefully this is fast enough
-            if let Some(pos) = vanilla_songs.iter().position(|s| s.name == vanilla_name) {
+        let mut pos = 0;
+        while pos < vanilla_songs.len() {
+            if let Some(mut replacement_songs) = all_replacements.remove(vanilla_songs[pos].name) {
+                let chosen_song = replacement_songs.choice_swap_remove(rng).unwrap();
+                for song in replacement_songs {
+                    // randomize all other replacement songs
+                    randomized_pool.push(song);
+                }
                 patches.push(PatchEntry {
                     vanilla: vanilla_songs.swap_remove(pos),
-                    custom: PatchTarget::Custom(custom),
+                    custom: PatchTarget::Custom(chosen_song),
                 })
             } else {
-                // name is not found, just randomize it
-                // TODO: better error handling
-                error!("vanilla song {vanilla_name} doesn't exist!");
-                randomized_pool.push(custom);
+                pos += 1;
             }
+        }
+        for leftover_replacement in all_replacements.keys() {
+            error!("vanilla song {} doesn't exist", leftover_replacement);
         }
     }
     info!(
