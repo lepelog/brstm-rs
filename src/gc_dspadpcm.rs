@@ -297,7 +297,7 @@ fn filter_records(vec_best: &mut [[f64; 3]; 8], exp: usize, records: &[[f64; 3]]
 }
 
 pub fn dsp_correlate_coefs(mut source: &[i16]) -> [[i16; 2]; 8] {
-    let num_frames = (source.len() + 13) / 14;
+    let num_frames = source.len().div_ceil(14);
     let mut frame_samples;
 
     // let mut block_buffer = vec![0i16; 0x3800];

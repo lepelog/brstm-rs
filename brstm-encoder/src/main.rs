@@ -35,7 +35,7 @@ fn main() -> anyhow::Result<()> {
         )
     };
     let (mut channels, sampling_rate) = ffmpeg::decode_channels(&args.input_path).unwrap();
-    if channels.len() == 0 {
+    if channels.is_empty() {
         bail!("no channels");
     }
 

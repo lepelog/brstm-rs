@@ -6,7 +6,7 @@ pub fn main() {
     let mut name_to_duration = Vec::new();
     for filename in args().skip(1) {
         let read = BrstmInformation::from_reader(&mut File::open(&filename).unwrap()).unwrap();
-        let name = filename.split_terminator('/').last().unwrap();
+        let name = filename.split_terminator('/').next_back().unwrap();
         // if read.info.loop_flag == 0 {
         name_to_duration.push((
             name.to_string(),

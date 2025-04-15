@@ -1,7 +1,4 @@
-use std::{
-    io::{self, Read, Seek, SeekFrom, Write},
-    iter::repeat,
-};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 
 use binrw::{BinReaderExt, BinResult, BinWriterExt};
 
@@ -246,7 +243,7 @@ impl BrstmInformation {
     /// - channels are referenced that don't exist
     /// - channels exist but aren't referenced
     pub fn check_tracks_valid(&self) -> bool {
-        let mut referenced_channels: Vec<_> = repeat(false).take(self.channels.len()).collect();
+        let mut referenced_channels: Vec<_> = std::iter::repeat_n(false, self.channels.len()).collect();
         // iterate over all tracks, mark each found channel as referenced and return false when a non
         // existing channel is referenced
         for track in self.tracks.iter() {

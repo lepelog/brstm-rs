@@ -19,8 +19,7 @@ pub fn decode_channels<P: AsRef<Path>>(p: &P) -> anyhow::Result<(Vec<Vec<i16>>, 
     // println!("{:?}", opened.format().description());
     let audio_stream = opened
         .streams()
-        .filter(|stream| stream.parameters().medium() == ffmpeg_next::media::Type::Audio)
-        .next()
+        .find(|stream| stream.parameters().medium() == ffmpeg_next::media::Type::Audio)
         .context("could not find audio stream")?;
     let audio_stream_index = audio_stream.index();
     let mut decoder = ffmpeg_next::codec::Context::from_parameters(audio_stream.parameters())
@@ -92,14 +91,14 @@ fn receive_decoded_frames(
     resampler: &mut ffmpeg_next::software::resampling::Context,
     mp3_raw_frame: &mut ffmpeg_next::frame::Audio,
     i16_raw_frame: &mut ffmpeg_next::frame::Audio,
-    out: &mut Vec<Vec<i16>>,
+    out: &mut [Vec<i16>],
 ) -> anyhow::Result<()> {
     while map_receive_result(decoder.receive_frame(mp3_raw_frame))? {
         // ???
         if mp3_raw_frame.channel_layout().is_empty() {
             mp3_raw_frame.set_channel_layout(ChannelLayout::STEREO);
         }
-        let mut delay = resampler.run(&mp3_raw_frame, i16_raw_frame).context("resampler failed")?;
+        let mut delay = resampler.run(mp3_raw_frame, i16_raw_frame).context("resampler failed")?;
         send_to_encode(i16_raw_frame, out)?;
         while delay.is_some() {
             delay = resampler.flush(i16_raw_frame)?;
@@ -109,7 +108,7 @@ fn receive_decoded_frames(
     Ok(())
 }
 
-fn send_to_encode(i16_raw_frame: &mut ffmpeg_next::frame::Audio, out: &mut Vec<Vec<i16>>) -> anyhow::Result<()> {
+fn send_to_encode(i16_raw_frame: &mut ffmpeg_next::frame::Audio, out: &mut [Vec<i16>]) -> anyhow::Result<()> {
     assert_eq!(out.len(), i16_raw_frame.planes());
     for (plane_idx, chn) in out.iter_mut().enumerate() {
         chn.extend_from_slice(i16_raw_frame.plane(plane_idx));

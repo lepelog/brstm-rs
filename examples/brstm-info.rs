@@ -60,11 +60,8 @@ pub fn process_file(filename: &String) -> binrw::BinResult<()> {
 }
 pub fn main() {
     for filename in args().skip(1) {
-        match process_file(&filename) {
-            Err(e) => {
-                eprintln!("problem with {filename}: {e:?}");
-            }
-            Ok(..) => {}
+        if let Err(e) = process_file(&filename) {
+            eprintln!("problem with {filename}: {e:?}");
         }
     }
 }
