@@ -10,7 +10,10 @@ use brstm::{
     reshaper::{calc_reshape, reshape, AdditionalTrackKind},
     BrstmInformation,
 };
-use rand::{seq::SliceRandom, Rng};
+use rand::{
+    seq::{IndexedRandom, SliceRandom},
+    Rng,
+};
 
 use crate::{
     loader::{CustomMusicInfo, MusicPack, SongCategory},
@@ -70,35 +73,41 @@ impl<T> VecRandChoiceRemove for Vec<T> {
         if self.is_empty() {
             None
         } else {
-            Some(self.swap_remove(rng.gen_range(0..self.len())))
+            Some(self.swap_remove(rng.random_range(0..self.len())))
         }
     }
 }
 
-pub fn only_set_fixed<R: Rng>(rng: &mut R, vanilla_songs: Vec<VanillaInfo>, music_packs: Vec<MusicPack>) -> Vec<PatchEntry> {
+pub fn only_set_fixed<R: Rng>(
+    rng: &mut R,
+    vanilla_songs: Vec<VanillaInfo>,
+    music_packs: Vec<MusicPack>,
+) -> Vec<PatchEntry> {
     let mut replacements: HashMap<String, Vec<Rc<CustomMusicInfo>>> = HashMap::new();
     for pack in music_packs.into_iter() {
         for (vanilla_name, replacement) in pack.replacements {
-            replacements.entry(vanilla_name).or_default().push(replacement);
+            replacements
+                .entry(vanilla_name)
+                .or_default()
+                .push(replacement);
         }
     }
-    vanilla_songs.into_iter().map(|vanilla_song| {
-        match replacements.get(vanilla_song.name) {
+    vanilla_songs
+        .into_iter()
+        .map(|vanilla_song| match replacements.get(vanilla_song.name) {
             Some(custom_songs) => {
                 let custom_song = custom_songs.choose(rng).unwrap();
                 PatchEntry {
                     vanilla: vanilla_song,
-                    custom: PatchTarget::Custom(Rc::clone(custom_song))
-                }
-            },
-            None => {
-                PatchEntry {
-                    vanilla: vanilla_song.clone(),
-                    custom: PatchTarget::Vanilla(vanilla_song)
+                    custom: PatchTarget::Custom(Rc::clone(custom_song)),
                 }
             }
-        }
-    }).collect()
+            None => PatchEntry {
+                vanilla: vanilla_song.clone(),
+                custom: PatchTarget::Vanilla(vanilla_song),
+            },
+        })
+        .collect()
 }
 
 pub fn randomize<R: Rng>(
@@ -125,7 +134,10 @@ pub fn randomize<R: Rng>(
         for pack in music_packs.into_iter() {
             randomized_pool.extend(pack.songs);
             for (vanilla_name, replacement) in pack.replacements {
-                all_replacements.entry(vanilla_name).or_default().push(replacement);
+                all_replacements
+                    .entry(vanilla_name)
+                    .or_default()
+                    .push(replacement);
             }
         }
         let mut pos = 0;

@@ -8,7 +8,10 @@ use std::{path::PathBuf, process::exit};
 use loader::read_all_music_packs;
 use randomizer::execute_patches;
 
-use crate::{randomizer::{only_set_fixed, randomize}, spoiler_log::write_spoiler_log};
+use crate::{
+    randomizer::{only_set_fixed, randomize},
+    spoiler_log::write_spoiler_log,
+};
 
 mod loader;
 mod randomizer;
@@ -31,7 +34,7 @@ pub struct Args {
     #[arg(short, long)]
     /// Ignore specific replacements and shuffle all
     random: bool,
-    #[arg(short = 'm', long, default_value="normal")]
+    #[arg(short = 'm', long, default_value = "normal")]
     /// How to deal with vanilla songs
     /// normal: Have vanilla songs in the pool, they are chosen after all other songs
     /// limit: Repeat already chosen custom songs instead of using vanilla songs
@@ -96,13 +99,15 @@ fn main() {
 
     let patches = if args.vanilla_mode == VanillaMode::ReplacementsOnly {
         only_set_fixed(&mut rng, vanilla_songs, music_packs)
-    } else { randomize(
-        &mut rng,
-        vanilla_songs,
-        music_packs,
-        args.random,
-        args.vanilla_mode == VanillaMode::Limit,
-    )};
+    } else {
+        randomize(
+            &mut rng,
+            vanilla_songs,
+            music_packs,
+            args.random,
+            args.vanilla_mode == VanillaMode::Limit,
+        )
+    };
     match write_spoiler_log(&base_path.join("logs/music-rando.log"), seed, &patches) {
         Ok(_) => (),
         Err(e) => error!("Error writing spoiler log: {e:?}"),
