@@ -4,7 +4,6 @@ use std::{
     ffi::OsString,
     fs::{self, File},
     io::BufRead,
-    iter::repeat,
     path::{Path, PathBuf},
     rc::Rc,
 };
@@ -16,20 +15,20 @@ use log::{debug, error, info};
 
 use crate::NONLOOPNING_SHORT_CUTOFF_SECONDS;
 
-///
-/// 1 stage
-/// 2 cs loop
-/// 3 cs no loop
-/// 4 2stream
-/// 5 2 stream add
-/// 6 3 stream
-/// 7 3 stream add
-/// 8 fanfare
-/// 9 effect
-/// 10 other
-/// 11 vanilla
-/// 12 2 add nonloop
-/// 13 3 (2std,3 add)
+//
+// 1 stage
+// 2 cs loop
+// 3 cs no loop
+// 4 2stream
+// 5 2 stream add
+// 6 3 stream
+// 7 3 stream add
+// 8 fanfare
+// 9 effect
+// 10 other
+// 11 vanilla
+// 12 2 add nonloop
+// 13 3 (2std,3 add)
 
 pub type AdditionalTracks = Cow<'static, [AdditionalTrackKind]>;
 
@@ -44,7 +43,7 @@ pub fn make_normal_additional_tracks(add_count: usize) -> AdditionalTracks {
         4 => Cow::Borrowed(&[Normal, Normal, Normal, Normal]),
         5 => Cow::Borrowed(&[Normal, Normal, Normal, Normal, Normal]),
         // allocate a list for the more rare cases
-        num => Cow::Owned(repeat(Normal).take(num).collect()),
+        num => Cow::Owned(std::iter::repeat_n(Normal, num).collect()),
     }
 }
 
@@ -93,7 +92,7 @@ pub fn read_all_music_packs(dir: &Path) -> binrw::BinResult<Vec<MusicPack>> {
             if entry
                 .file_name()
                 .to_str()
-                .map_or(false, |n| !n.starts_with('_') && !n.starts_with('.'))
+                .is_some_and(|n| !n.starts_with('_') && !n.starts_with('.'))
             {
                 info!("loading pack {:?}", &path);
                 dirs.push(path);
@@ -129,7 +128,7 @@ pub fn read_music_pack(dir: &Path) -> binrw::BinResult<MusicPack> {
             if line
                 .bytes()
                 .next()
-                .map_or(true, |b| !b.is_ascii_alphanumeric())
+                .is_none_or(|b| !b.is_ascii_alphanumeric())
             {
                 // ignore lines that we already know are not valid
                 continue;
@@ -145,7 +144,7 @@ pub fn read_music_pack(dir: &Path) -> binrw::BinResult<MusicPack> {
                 // find this custom song in the paths
                 if let Some(pos) = songs
                     .iter()
-                    .position(|s| s.path.file_name().map_or(false, |n| n == custom_with_ext))
+                    .position(|s| s.path.file_name().is_some_and(|n| n == custom_with_ext))
                 {
                     debug!("successfully found replacement for {vanilla}: {custom}");
                     let custom_replacement = songs.swap_remove(pos);
@@ -153,7 +152,7 @@ pub fn read_music_pack(dir: &Path) -> binrw::BinResult<MusicPack> {
                     replacements.insert(vanilla.to_string(), custom_replacement);
                 } else if let Some(pos) = already_fixed_placed
                     .iter()
-                    .position(|s| s.path.file_name().map_or(false, |n| n == custom_with_ext))
+                    .position(|s| s.path.file_name().is_some_and(|n| n == custom_with_ext))
                 {
                     debug!("successfully found replacement for {vanilla}: {custom} (again)");
                     replacements.insert(vanilla.to_string(), Rc::clone(&already_fixed_placed[pos]));
@@ -191,7 +190,7 @@ pub fn read_music_dir_rec(
                 let path_meta = path.metadata()?;
                 if path_meta.is_dir() {
                     read_music_dir_rec(&path, new_depth, songs)?;
-                } else if path_meta.is_file() && path.extension().map_or(false, |e| e == "brstm") {
+                } else if path_meta.is_file() && path.extension().is_some_and(|e| e == "brstm") {
                     let read_file = || -> binrw::BinResult<_> {
                         let f = File::open(&path)?;
                         let mut result = BrstmInformation::from_reader(&mut BufReader::new(f))?;

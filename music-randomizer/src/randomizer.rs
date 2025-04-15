@@ -293,7 +293,7 @@ pub fn execute_patches(
                 }
             }
             PatchTarget::Vanilla(v) => {
-                let mut f = File::open(&construct_path(vanilla_path, v.name))?;
+                let mut f = File::open(construct_path(vanilla_path, v.name))?;
                 BrstmInformation::from_reader(&mut f)?.into_with_data(&mut f)?
             }
         };
