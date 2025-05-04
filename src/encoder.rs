@@ -182,7 +182,7 @@ pub fn encode_brstm(
             channels.iter().map(|c| c.len()).collect(),
         ));
     }
-    if channels.len() % 2 != 0 {
+    if channels.len() % 2 != 0 && channels.len() != 1 {
         return Err(EncodingError::UnevenChannelCount(channels.len()));
     }
     if channels.len() > 16 {
@@ -229,12 +229,17 @@ pub fn encode_brstm(
         .map(BrstmStreamEncoder::get_adpcm_channel_info)
         .collect();
 
-    let tracks = (0..(channels.len() as u8 / 2))
+    let tracks = if channels.len() == 1 {
+        vec![TrackDescription{
+            channels: Channels::Mono(0),
+            ..Default::default()
+        }]
+    } else { (0..(channels.len() as u8 / 2))
         .map(|t| TrackDescription {
             channels: Channels::Stereo(t * 2, t * 2 + 1),
             ..Default::default()
         })
-        .collect();
+        .collect()};
 
     let out_brstm = BrstmInformation {
         channels: channel_infos,

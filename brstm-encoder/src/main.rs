@@ -31,7 +31,8 @@ fn main() -> anyhow::Result<()> {
             "{}.brstm",
             args.input_path
                 .rsplit_once(".")
-                .context("The input file needs to have a file extension!")?.0
+                .context("The input file needs to have a file extension!")?
+                .0
         )
     };
     let (mut channels, sampling_rate) = ffmpeg::decode_channels(&args.input_path).unwrap();
