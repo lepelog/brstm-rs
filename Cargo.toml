@@ -9,7 +9,7 @@ repository = "https://github.com/lepelog/brstm-rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-binrw = "0.14.0"
+binrw = "0.15.0"
 thiserror = "2.0.0"
 
 [workspace]
