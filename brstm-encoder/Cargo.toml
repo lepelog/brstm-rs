@@ -10,4 +10,4 @@ anyhow = "1.0.82"
 binrw = "0.15.0"
 brstm = { path = ".." }
 clap = { version = "4.5.4", features = ["derive", "cargo"] }
-ffmpeg-next = { version = "7.1.0" }
+ffmpeg-next = { version = "8.0.0" }
