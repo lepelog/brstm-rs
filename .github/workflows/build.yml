@@ -105,7 +105,7 @@ jobs:
           mv ./target/$TARGET/release/music-randomizer$EXEC_SUFFIX ./artifacts
           mv ./target/$TARGET/release/brstm-encoder$EXEC_SUFFIX ./artifacts
       - name: Archive artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.OS }}
           path: |
