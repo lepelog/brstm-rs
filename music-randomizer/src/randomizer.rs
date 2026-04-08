@@ -12,7 +12,7 @@ use brstm::{
 };
 use rand::{
     seq::{IndexedRandom, SliceRandom},
-    Rng,
+    Rng, RngExt
 };
 
 use crate::{
